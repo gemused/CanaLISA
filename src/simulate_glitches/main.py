@@ -26,7 +26,7 @@ def init_cl():
     parser.add_argument(
         "--orbit_input_h5",
         type=str,
-        default="new_orbits.h5",
+        default="orbits.h5",
         help="Orbit .h5 file name",
     )
     parser.add_argument(

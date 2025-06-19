@@ -113,7 +113,7 @@ def simulate_lisa(
         orbits=orbit_input_h5_path,
         physics_upsampling=glitch_inputs["physics_upsampling"],
         aafilter=glitch_inputs["aafilter"],
-        glitches=glitch_input_h5_path,
+        glitches=glitch_input_h5_path,    
     )
 
     # lisa_instrument.disable_all_noises(but="laser")
@@ -159,7 +159,7 @@ def compute_and_save_tdi_channels(
         channel = channels[i]
 
         # CALCULATE TDI CHANNEL DATA
-        tdi_data = channel.build(**data.args)(data.measurements)/(2.816E14)
+        tdi_data = channel.build(**data.args)(data.measurements)
 
         # WINDOW TDI CHANNEL DATA
         window = tukey(tdi_data.size, alpha=0.001)

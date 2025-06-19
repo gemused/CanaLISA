@@ -61,17 +61,14 @@ for i in range(0, len(delays) - 1):
         for j in range(1, i+1):
             pre[t] = pre[t] - coeff[j]*pre[t-delays[j]]/coeff[0]
 
-figure, axis = plt.subplots(3, 1, figsize=(8,8))
+figure, axis = plt.subplots(2, 1, figsize=(8,6))
 
 axis[0].plot(t_vals, post)
 axis[0].set_title("X")
 
 axis[1].plot(t_vals, tmi_vals)
 axis[1].plot(t_vals, pre)
-axis[1].set_title("tmi")
-
-axis[2].plot(t_vals, pre)
-axis[2].set_title("tmi (reconstruction)")
+axis[1].set_title("TMI and Reconstruction")
 
 plt.subplots_adjust(hspace=0.6)
 
