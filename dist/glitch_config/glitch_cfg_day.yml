@@ -1,5 +1,3 @@
-t_max: 10454400 s
-t_min: 10368000 s
 glitch_type: 'Equal Spacing'
 glitch_rate: 4
 glitch_spacing: 20000

@@ -207,29 +207,44 @@ def file_paths_to_params(
 
     glitch_cfg = ymlio.load_config(glitch_cfg_path)
     pipe_cfg = ymlio.load_config(pipe_cfg_path)
-    t0 = 10368000 # time in which simulation starts
-    
-    params = {
-        "t0": t0,
-        "t_max": t0 + pipe_cfg["duration"].to("s").value,
-        "dt": pipe_cfg["dt"].to("s").value
-        / pipe_cfg["physic_upsampling"],
-        "physic_upsampling": pipe_cfg["physic_upsampling"],
-        "size": pipe_cfg["duration"].to("s").value
-        / pipe_cfg["dt"].to("s").value,
-        "glitch_type": glitch_cfg["glitch_type"],
-        "glitch_rate": glitch_cfg["glitch_rate"],
-        "glitch_spacing": glitch_cfg["glitch_spacing"],
-        "amp_type": glitch_cfg["amp_type"],
-        "avg_amp": glitch_cfg["avg_amp"],
-        "std_amp": glitch_cfg["std_amp"],
-        "amp_set": [glitch_cfg["amp_set_min"], glitch_cfg["amp_set_max"]],
-        "beta_type": glitch_cfg["beta_type"],
-        "beta_set": [glitch_cfg["beta_set_min"], glitch_cfg["beta_set_max"]],
-        "beta_scale": glitch_cfg["beta_scale"],
-        "glitch_output_h5": PATH_glitch_data + glitch_output_h5,
-        "glitch_output_txt": PATH_glitch_data + glitch_output_txt,
-    }
+    t0 = 10368000
+
+    if "t_inj" in glitch_cfg:
+        params = {
+            "t0": t0,
+            "size": pipe_cfg["duration"].to("s").value
+            / pipe_cfg["dt"].to("s").value,
+            "dt": pipe_cfg["dt"].to("s").value
+            / pipe_cfg["physic_upsampling"],
+            "physic_upsampling": pipe_cfg["physic_upsampling"],
+            "t_inj": glitch_cfg["t_inj"],
+            "beta": glitch_cfg["beta"],
+            "level": glitch_cfg["level"],
+            "glitch_output_h5": PATH_glitch_data + glitch_output_h5,
+            "glitch_output_txt": PATH_glitch_data + glitch_output_txt,
+        }
+    else:
+        params = {
+            "t0": t0,
+            "t_max": t0 + pipe_cfg["duration"].to("s").value,
+            "dt": pipe_cfg["dt"].to("s").value
+            / pipe_cfg["physic_upsampling"],
+            "physic_upsampling": pipe_cfg["physic_upsampling"],
+            "size": pipe_cfg["duration"].to("s").value
+            / pipe_cfg["dt"].to("s").value,
+            "glitch_type": glitch_cfg["glitch_type"],
+            "glitch_rate": glitch_cfg["glitch_rate"],
+            "glitch_spacing": glitch_cfg["glitch_spacing"],
+            "amp_type": glitch_cfg["amp_type"],
+            "avg_amp": glitch_cfg["avg_amp"],
+            "std_amp": glitch_cfg["std_amp"],
+            "amp_set": [glitch_cfg["amp_set_min"], glitch_cfg["amp_set_max"]],
+            "beta_type": glitch_cfg["beta_type"],
+            "beta_set": [glitch_cfg["beta_set_min"], glitch_cfg["beta_set_max"]],
+            "beta_scale": glitch_cfg["beta_scale"],
+            "glitch_output_h5": PATH_glitch_data + glitch_output_h5,
+            "glitch_output_txt": PATH_glitch_data + glitch_output_txt,
+        }
 
     return params
 
@@ -243,69 +258,75 @@ def simulate_glitches(params):
     """
     np.random.seed(params["seed"])
 
-    glitch_type = params["glitch_type"]
-    glitch_amp_type = params["amp_type"]
-    glitch_beta_type = params["beta_type"]
-
     inj_points = ["tm_12"]#, "tm_23", "tm_31", "tm_13", "tm_32", "tm_21"]
 
-    # SET GLITCH TIMES
-    if glitch_type.lower() == "poisson":
-        glitch_times = distributions.glitch_times_poisson(
-            glitch_rate=params["glitch_rate"],
-            t0=params["t0"],
-            t_max=params["t_max"],
-            seed=params["seed"],
-        )
-    elif glitch_type.lower() == "equal spacing":
-        glitch_times = distributions.glitch_times_equal_spacing(
-            equal_space=params["glitch_spacing"],
-            t0=params["t0"],
-            t_max=params["t_max"],
-        )
+    if "t_inj" in params:
+        for i in range(len(params["t_inj"])):
+            params["t_inj"][i] += params["t0"]
+            
+        glitch_times = params["t_inj"]
+        beta = params["beta"]
+        amp = params["level"]
     else:
-        sys.exit(f"Not an available glitch_type {glitch_type}")
+        glitch_type = params["glitch_type"]
+        glitch_amp_type = params["amp_type"]
+        glitch_beta_type = params["beta_type"] 
 
-    n_glitches = len(glitch_times)
+        # SET GLITCH TIMES
+        if glitch_type.lower() == "poisson":
+            glitch_times = distributions.glitch_times_poisson(
+                glitch_rate=params["glitch_rate"],
+                t0=params["t0"],
+                t_max=params["t_max"],
+                seed=params["seed"],
+            )
+        elif glitch_type.lower() == "equal spacing":
+            glitch_times = distributions.glitch_times_equal_spacing(
+                equal_space=params["glitch_spacing"],
+                t0=params["t0"],
+                t_max=params["t_max"],
+            )
+        else:
+            sys.exit(f"Not an available glitch_type {glitch_type}")
 
-    # SET BETA
-    if glitch_beta_type.lower() == "set":
-        beta = distributions.betas_dist_set(
-            n_samples=n_glitches,
-            beta_set=params["beta_set"],
-        )
-    elif glitch_beta_type.lower() == "exponential":
-        beta = distributions.betas_dist_exponential(
-            n_samples=n_glitches,
-            scale=params["beta_scale"],
-            seed=params["seed"],
-        )
-    else:
-        sys.exit(f"Not an available glitch_beta_type {glitch_beta_type}")
+        # SET BETA
+        if glitch_beta_type.lower() == "set":
+            beta = distributions.betas_dist_set(
+                n_samples=len(glitch_times),
+                beta_set=params["beta_set"],
+            )
+        elif glitch_beta_type.lower() == "exponential":
+            beta = distributions.betas_dist_exponential(
+                n_samples=len(glitch_times),
+                scale=params["beta_scale"],
+                seed=params["seed"],
+            )
+        else:
+            sys.exit(f"Not an available glitch_beta_type {glitch_beta_type}")
 
-    # SET AMPLITUDE
-    if glitch_amp_type.lower() == "set":
-        amp = distributions.amplitude_dist_set(
-            n_samples=n_glitches,
-            amp_set=params["amp_set"],
-            seed=params["seed"],
-        )
-    elif glitch_amp_type.lower() == "gaussian":
-        amp = distributions.amplitude_dist_gaussian(
-            n_samples=n_glitches,
-            avg_amp=params["avg_amp"],
-            std_amp=params["std_amp"],
-            seed=params["seed"],
-        )
-    else:
-        sys.exit(f"Not an available glitch_amp_type {glitch_amp_type}")
+        # SET AMPLITUDE
+        if glitch_amp_type.lower() == "set":
+            amp = distributions.amplitude_dist_set(
+                n_samples=len(glitch_times),
+                amp_set=params["amp_set"],
+                seed=params["seed"],
+            )
+        elif glitch_amp_type.lower() == "gaussian":
+            amp = distributions.amplitude_dist_gaussian(
+                n_samples=len(glitch_times),
+                avg_amp=params["avg_amp"],
+                std_amp=params["std_amp"],
+                seed=params["seed"],
+            )
+        else:
+            sys.exit(f"Not an available glitch_amp_type {glitch_amp_type}")
 
     # PRODUCE GLITCHES
     if os.path.exists(params["glitch_output_h5"]):
         os.remove(params["glitch_output_h5"])
 
     glitch_list = []
-    for i in range(n_glitches):
+    for i in range(len(glitch_times)):
         g = lisaglitch.IntegratedShapeletGlitch(
             inj_point=np.random.choice(inj_points),
             t0=params["t0"],
@@ -316,7 +337,7 @@ def simulate_glitches(params):
             level=amp[i],
         )
         glitch_list.append(g)
-        g.write(path=params["glitch_output_h5"], mode="a")#, t0=params["t0"]) #there is a t0!! use it!!
+        g.write(path=params["glitch_output_h5"], mode="a")
 
     # FORMAT/MAKE GLITCH FILE
     header = (
@@ -384,3 +405,7 @@ def make_glitch(args):
 """Uncomment to run make_glitch alone"""
 # if __name__ == "__main__":
 #     make_glitch(args=None)
+
+
+# keep going through loop doing glitch_i until config[glitch_i] doesn't exist
+# each glitch needs t_inj, beta, level

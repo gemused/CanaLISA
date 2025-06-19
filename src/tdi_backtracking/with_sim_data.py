@@ -14,7 +14,8 @@ MOSAS = ["12", "23", "31", "13", "32", "21"]
 
 # ~~~~~~~~~~ INITIALIZE DATA ~~~~~~~~~~
 glitch_info = np.genfromtxt(PATH_glitch_data + "default_glitch_output.txt")
-t_g = glitch_info[1:,5][2]
+glitch_i = 0
+t_g = glitch_info[1:,5][glitch_i]
 t_0 = glitch_info[1:,4][0]
 dt = glitch_info[1:,2][0]
 t_window_left = 5
