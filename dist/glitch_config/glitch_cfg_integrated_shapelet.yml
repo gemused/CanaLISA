@@ -1,0 +1,5 @@
+glitch_0:
+  type: "IntegratedShapeletGlitch"
+  t_inj: 43200
+  beta: 5e-3
+  level: -5e-6

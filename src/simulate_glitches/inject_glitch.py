@@ -80,12 +80,10 @@ def init_glitch_inputs(glitch_input_txt_path):
     glitch_inputs = np.genfromtxt(glitch_input_txt_path)
 
     glitch_inputs_dict = {
-        "n_samples": glitch_inputs[1:, 1][0],
+        "size": glitch_inputs[1:, 1][0],
         "dt": glitch_inputs[1:, 2][0],
-        "t0": glitch_inputs[1:, 4][0],
         "physics_upsampling": glitch_inputs[1:, 3][0],
-        "dt_physic": glitch_inputs[1:, 2][0] / glitch_inputs[1:, 3][0],
-        "aafilter": None,
+        "t0": glitch_inputs[1:, 4][0],
     }
 
     return glitch_inputs_dict
@@ -107,16 +105,15 @@ def simulate_lisa(
 
     # CREATE LISA INSTRUMENT OBJECT
     lisa_instrument = Instrument(
-        size=glitch_inputs["n_samples"],
+        size=glitch_inputs["size"],
         dt=glitch_inputs["dt"],
         t0=glitch_inputs["t0"],
         orbits=orbit_input_h5_path,
         physics_upsampling=glitch_inputs["physics_upsampling"],
-        aafilter=glitch_inputs["aafilter"],
-        glitches=glitch_input_h5_path,    
+        aafilter=None,
+        glitches=glitch_input_h5_path, 
     )
 
-    # lisa_instrument.disable_all_noises(but="laser")
     lisa_instrument.disable_dopplers()
 
     if disable_noise:
@@ -125,7 +122,6 @@ def simulate_lisa(
     # SIMULATE LISA AND SAVE RESULTS TO FILE
     if os.path.exists(simulation_output_h5_path):
         os.remove(simulation_output_h5_path)
-        print(f"The file {simulation_output_h5_path} has been deleted.")
 
     lisa_instrument.write(simulation_output_h5_path)
 

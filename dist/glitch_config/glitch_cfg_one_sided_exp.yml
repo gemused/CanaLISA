@@ -1,0 +1,6 @@
+glitch_0:
+  type: "OneSidedDoubleExpGlitch"
+  t_inj: 43200
+  t_rise: 5
+  t_fall: 5
+  level: -1e-2

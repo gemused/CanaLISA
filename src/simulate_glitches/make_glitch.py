@@ -209,7 +209,12 @@ def file_paths_to_params(
     pipe_cfg = ymlio.load_config(pipe_cfg_path)
     t0 = 10368000
 
-    if "t_inj" in glitch_cfg:
+    if "glitch_0" in glitch_cfg:
+        glitches = [value for key, value in glitch_cfg.items()]
+        
+        for glitch in glitches:
+            glitch["t_inj"] += t0
+
         params = {
             "t0": t0,
             "size": pipe_cfg["duration"].to("s").value
@@ -217,9 +222,7 @@ def file_paths_to_params(
             "dt": pipe_cfg["dt"].to("s").value
             / pipe_cfg["physic_upsampling"],
             "physic_upsampling": pipe_cfg["physic_upsampling"],
-            "t_inj": glitch_cfg["t_inj"],
-            "beta": glitch_cfg["beta"],
-            "level": glitch_cfg["level"],
+            "glitches": glitches,
             "glitch_output_h5": PATH_glitch_data + glitch_output_h5,
             "glitch_output_txt": PATH_glitch_data + glitch_output_txt,
         }
@@ -249,6 +252,71 @@ def file_paths_to_params(
     return params
 
 
+def params_to_glitches(params):
+    glitch_type = params["glitch_type"]
+    glitch_amp_type = params["amp_type"]
+    glitch_beta_type = params["beta_type"] 
+
+    # SET GLITCH TIMES
+    if glitch_type.lower() == "poisson":
+        glitch_times = distributions.glitch_times_poisson(
+            glitch_rate=params["glitch_rate"],
+            t0=params["t0"],
+            t_max=params["t_max"],
+            seed=params["seed"],
+        )
+    elif glitch_type.lower() == "equal spacing":
+        glitch_times = distributions.glitch_times_equal_spacing(
+            equal_space=params["glitch_spacing"],
+            t0=params["t0"],
+            t_max=params["t_max"],
+        )
+    else:
+        sys.exit(f"Not an available glitch_type {glitch_type}")
+
+    # SET BETA
+    if glitch_beta_type.lower() == "set":
+        beta = distributions.betas_dist_set(
+            n_samples=len(glitch_times),
+            beta_set=params["beta_set"],
+        )
+    elif glitch_beta_type.lower() == "exponential":
+        beta = distributions.betas_dist_exponential(
+            n_samples=len(glitch_times),
+            scale=params["beta_scale"],
+            seed=params["seed"],
+        )
+    else:
+        sys.exit(f"Not an available glitch_beta_type {glitch_beta_type}")
+
+    # SET AMPLITUDE
+    if glitch_amp_type.lower() == "set":
+        amp = distributions.amplitude_dist_set(
+            n_samples=len(glitch_times),
+            amp_set=params["amp_set"],
+            seed=params["seed"],
+        )
+    elif glitch_amp_type.lower() == "gaussian":
+        amp = distributions.amplitude_dist_gaussian(
+            n_samples=len(glitch_times),
+            avg_amp=params["avg_amp"],
+            std_amp=params["std_amp"],
+            seed=params["seed"],
+        )
+    else:
+        sys.exit(f"Not an available glitch_amp_type {glitch_amp_type}")
+    
+    glitches = []
+    for i in range(len(glitch_times)):
+        glitches.append(
+            {"type": "IntegratedShapeletGlitch",
+            "t_inj": glitch_times[i],
+            "beta": beta[i],
+            "level": amp[i]})
+    
+    return glitches
+
+
 def simulate_glitches(params):
     """Simulate glitches given dictionary of parameters and write glitches to
     file.
@@ -260,82 +328,41 @@ def simulate_glitches(params):
 
     inj_points = ["tm_12"]#, "tm_23", "tm_31", "tm_13", "tm_32", "tm_21"]
 
-    if "t_inj" in params:
-        for i in range(len(params["t_inj"])):
-            params["t_inj"][i] += params["t0"]
-            
-        glitch_times = params["t_inj"]
-        beta = params["beta"]
-        amp = params["level"]
+    if "glitches" in params:
+        glitches = params["glitches"]
     else:
-        glitch_type = params["glitch_type"]
-        glitch_amp_type = params["amp_type"]
-        glitch_beta_type = params["beta_type"] 
-
-        # SET GLITCH TIMES
-        if glitch_type.lower() == "poisson":
-            glitch_times = distributions.glitch_times_poisson(
-                glitch_rate=params["glitch_rate"],
-                t0=params["t0"],
-                t_max=params["t_max"],
-                seed=params["seed"],
-            )
-        elif glitch_type.lower() == "equal spacing":
-            glitch_times = distributions.glitch_times_equal_spacing(
-                equal_space=params["glitch_spacing"],
-                t0=params["t0"],
-                t_max=params["t_max"],
-            )
-        else:
-            sys.exit(f"Not an available glitch_type {glitch_type}")
-
-        # SET BETA
-        if glitch_beta_type.lower() == "set":
-            beta = distributions.betas_dist_set(
-                n_samples=len(glitch_times),
-                beta_set=params["beta_set"],
-            )
-        elif glitch_beta_type.lower() == "exponential":
-            beta = distributions.betas_dist_exponential(
-                n_samples=len(glitch_times),
-                scale=params["beta_scale"],
-                seed=params["seed"],
-            )
-        else:
-            sys.exit(f"Not an available glitch_beta_type {glitch_beta_type}")
-
-        # SET AMPLITUDE
-        if glitch_amp_type.lower() == "set":
-            amp = distributions.amplitude_dist_set(
-                n_samples=len(glitch_times),
-                amp_set=params["amp_set"],
-                seed=params["seed"],
-            )
-        elif glitch_amp_type.lower() == "gaussian":
-            amp = distributions.amplitude_dist_gaussian(
-                n_samples=len(glitch_times),
-                avg_amp=params["avg_amp"],
-                std_amp=params["std_amp"],
-                seed=params["seed"],
-            )
-        else:
-            sys.exit(f"Not an available glitch_amp_type {glitch_amp_type}")
+        glitches = params_to_glitches(params)
 
     # PRODUCE GLITCHES
     if os.path.exists(params["glitch_output_h5"]):
         os.remove(params["glitch_output_h5"])
 
     glitch_list = []
-    for i in range(len(glitch_times)):
-        g = lisaglitch.IntegratedShapeletGlitch(
-            inj_point=np.random.choice(inj_points),
-            t0=params["t0"],
-            size=params["size"],
-            dt=params["dt"],
-            t_inj=glitch_times[i],
-            beta=beta[i],
-            level=amp[i],
-        )
+    for glitch in glitches:
+        if glitch["type"] == "IntegratedShapeletGlitch":
+            g = lisaglitch.IntegratedShapeletGlitch(
+                inj_point=np.random.choice(inj_points),
+                t0=params["t0"],
+                size=params["size"],
+                dt=params["dt"],
+                t_inj=glitch["t_inj"],
+                beta=glitch["beta"],
+                level=glitch["level"],
+            )
+        elif glitch["type"] == "OneSidedDoubleExpGlitch":
+            g = lisaglitch.OneSidedDoubleExpGlitch(
+                inj_point=np.random.choice(inj_points),
+                t0=params["t0"],
+                size=params["size"],
+                dt=params["dt"],
+                t_inj=glitch["t_inj"],
+                t_rise=glitch["t_rise"],
+                t_fall=glitch["t_fall"],
+                level=glitch["level"]
+            )
+        else:
+            sys.exit("Not a supported glitch type")
+
         glitch_list.append(g)
         g.write(path=params["glitch_output_h5"], mode="a")
 
@@ -347,32 +374,25 @@ def simulate_glitches(params):
         + "physics_upsampling  "
         + "t0  "
         + "t_inj  "
-        + "inj_point  "
-        + "beta  "
-        + "level  "
     )
 
     output_txt = params["glitch_output_txt"]
 
     if os.path.exists(output_txt):
         os.remove(output_txt)
-        print(f"The file {output_txt} has been deleted.")
 
     with open(f"{output_txt}", "w") as f:
         f.write(header + "\n")
 
     with open(f"{output_txt}", "a") as f:
-        for g in glitch_list:
+        for glitch in glitches:
             f.write(
-                str(g.generator) + "  "
-                + str(g.size) + "  "
-                + str(g.dt) + "  "
+                glitch["type"] + "  "
+                + str(params["size"]) + "  "
+                + str(params["dt"]) + "  "
                 + str(params["physic_upsampling"]) + "  "
-                + str(g.t0) + "  "
-                + str(g.t_inj) + "  "
-                + str(g.inj_point) + "  "
-                + str(g.beta) + "  "
-                + str(g.level) + "\n"
+                + str(params["t0"]) + "  "
+                + str(glitch["t_inj"]) + "\n"
             )
 
 
@@ -405,7 +425,3 @@ def make_glitch(args):
 """Uncomment to run make_glitch alone"""
 # if __name__ == "__main__":
 #     make_glitch(args=None)
-
-
-# keep going through loop doing glitch_i until config[glitch_i] doesn't exist
-# each glitch needs t_inj, beta, level
