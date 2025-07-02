@@ -1,2 +1,3 @@
-generator  size  dt  physics_upsampling  t0  t_inj  
-OneSidedDoubleExpGlitch  345600.0  0.25  1  10368000  10411200
+generator  inj_point size  dt  physics_upsampling  t0  t_inj 
+OneSidedDoubleExpGlitch  readout_isi_carrier_12 345600.0  0.25  1  10368000  10378000
+OneSidedDoubleExpGlitch  readout_isi_carrier_13 345600.0  0.25  1  10368000  10388000

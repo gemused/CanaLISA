@@ -80,10 +80,10 @@ def init_glitch_inputs(glitch_input_txt_path):
     glitch_inputs = np.genfromtxt(glitch_input_txt_path)
 
     glitch_inputs_dict = {
-        "size": glitch_inputs[1:, 1][0],
-        "dt": glitch_inputs[1:, 2][0],
-        "physics_upsampling": glitch_inputs[1:, 3][0],
-        "t0": glitch_inputs[1:, 4][0],
+        "size": glitch_inputs[1:, 2][0],
+        "dt": glitch_inputs[1:, 3][0],
+        "physics_upsampling": glitch_inputs[1:, 4][0],
+        "t0": glitch_inputs[1:, 5][0],
     }
 
     return glitch_inputs_dict
@@ -111,7 +111,7 @@ def simulate_lisa(
         orbits=orbit_input_h5_path,
         physics_upsampling=glitch_inputs["physics_upsampling"],
         aafilter=None,
-        glitches=glitch_input_h5_path, 
+        glitches=glitch_input_h5_path,
     )
 
     lisa_instrument.disable_dopplers()

@@ -326,7 +326,8 @@ def simulate_glitches(params):
     """
     np.random.seed(params["seed"])
 
-    inj_points = ["tm_12"]#, "tm_23", "tm_31", "tm_13", "tm_32", "tm_21"]
+    # inj_points = ["readout_isi_carrier_12"]
+    inj_points = ["tm_12"]
 
     if "glitches" in params:
         glitches = params["glitches"]
@@ -351,7 +352,7 @@ def simulate_glitches(params):
             )
         elif glitch["type"] == "OneSidedDoubleExpGlitch":
             g = lisaglitch.OneSidedDoubleExpGlitch(
-                inj_point=np.random.choice(inj_points),
+                inj_point=glitch["inj_point"],
                 t0=params["t0"],
                 size=params["size"],
                 dt=params["dt"],
@@ -369,11 +370,12 @@ def simulate_glitches(params):
     # FORMAT/MAKE GLITCH FILE
     header = (
         "generator  "
+        + "inj_point "
         + "size  "
         + "dt  "
         + "physics_upsampling  "
         + "t0  "
-        + "t_inj  "
+        + "t_inj "
     )
 
     output_txt = params["glitch_output_txt"]
@@ -388,6 +390,7 @@ def simulate_glitches(params):
         for glitch in glitches:
             f.write(
                 glitch["type"] + "  "
+                + str(glitch["inj_point"]) + " "
                 + str(params["size"]) + "  "
                 + str(params["dt"]) + "  "
                 + str(params["physic_upsampling"]) + "  "
