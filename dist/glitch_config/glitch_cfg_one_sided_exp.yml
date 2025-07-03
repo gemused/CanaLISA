@@ -1,15 +1,7 @@
 glitch_0:
-  type: "OneSidedDoubleExpGlitch"
+  shape: "OneSidedDoubleExpGlitch"
   inj_point: "readout_isi_carrier_12"
-  t_inj: 10000
+  t_inj: 43200
   t_rise: 5
   t_fall: 20
-  level: 1e5
-
-glitch_1:
-  type: "OneSidedDoubleExpGlitch"
-  inj_point: "readout_isi_carrier_13"
-  t_inj: 20000
-  t_rise: 5
-  t_fall: 20
-  level: 1e5
+  level: 5e3

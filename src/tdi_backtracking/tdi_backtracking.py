@@ -328,7 +328,7 @@ def compute_overlap(sim_data, model, psd_data_h5):
     return round(abs(overlap), 3)
 
 
-def plot(sim_data, tdi_X, tdi_Y, model, overlap, plot_output):
+def plot(sim_data, tdi_A, tdi_B, model, overlap, plot_output):
     figure, axis = plt.subplots(3, 1, figsize=(8, 8), height_ratios=[3, 1, 1])
 
     axis[0].plot(
@@ -343,10 +343,10 @@ def plot(sim_data, tdi_X, tdi_Y, model, overlap, plot_output):
     axis[0].set_title("Sim and Reconstructions")
     axis[0].legend(loc="upper right")
 
-    axis[1].plot(tdi_X.sample_times, tdi_X)
+    axis[1].plot(tdi_A.sample_times, tdi_A)
     axis[1].set_title("TDI X")
 
-    axis[2].plot(tdi_Y.sample_times, tdi_Y)
+    axis[2].plot(tdi_B.sample_times, tdi_B)
     axis[2].set_title("TDI Y")
 
     plt.subplots_adjust(hspace=0.5)
@@ -360,6 +360,7 @@ def tdi_backtracking(
 ):
     glitch_info = np.genfromtxt(PATH_glitch_data + glitch_input_txt, dtype=str)
     expected_inj_points = glitch_info[1:, 1]
+    levels = glitch_info[1:, 7]
     num_glitches = len(expected_inj_points)
 
     predicted_inj_points = []
@@ -438,9 +439,11 @@ def tdi_backtracking(
 
         if interferometer in expected_inj_point and mosa in expected_inj_point:
             num_success += 1
-
-        print(f"""{i} -- PREDICTED: {predicted_inj_point}
-     EXPECTED: {expected_inj_point}""")
+            # print("SUCCESS")
+        else:
+            print(f"{i} -- PREDICTED: {predicted_inj_point} EXPECTED: {expected_inj_point}")
+            print(f"LEVEL: {levels[i]}")
+            print("FAIL")
 
     print(f"{num_success}/{num_glitches} inj_points identified successfuly")
 
