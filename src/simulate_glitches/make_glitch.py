@@ -236,6 +236,7 @@ def make_glitches(glitch_cfg, pipe_cfg, t0):
     glitches = []
     t_injs = []
     window = 500
+    t_max = t0 + pipe_cfg["duration"].to("s").value
 
     for i in range(int(glitch_cfg["daily_rate"] * pipe_cfg["duration"].to("d").value)):
         invalid_t_inj = True
@@ -243,7 +244,7 @@ def make_glitches(glitch_cfg, pipe_cfg, t0):
             t_inj = np.random.randint(t0, t0 + pipe_cfg["duration"].to("s").value)
             if t_injs:
                 for t in t_injs:
-                    if t_inj < t + window and t_inj > t - window:
+                    if t_inj < t + window and t_inj > t - window and t_inj + window < t_max:
                         invalid_t_inj = True
                         break
                     else:
@@ -325,6 +326,8 @@ def simulate_glitches(params):
         + "t0  "
         + "t_inj "
         + "level "
+        + "t_rise "
+        + "t_fall "
     )
 
     output_txt = params["glitch_output_txt"]
@@ -345,7 +348,9 @@ def simulate_glitches(params):
                 + str(params["physic_upsampling"]) + "  "
                 + str(params["t0"]) + "  "
                 + str(glitch["t_inj"]) + " "
-                + str(glitch["level"]) + "\n"
+                + str(glitch["level"]) + " "
+                + str(glitch["t_rise"]) + " "
+                + str(glitch["t_fall"]) + "\n"
             )
 
 

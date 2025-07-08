@@ -6,6 +6,7 @@ from gwpy.timeseries import TimeSeries, TimeSeriesDict
 from lisainstrument import Instrument
 from pytdi import Data
 import argparse
+import matplotlib.pyplot as plt
 
 
 PATH_src = os.path.abspath(os.path.join(os.getcwd(), os.pardir))
@@ -162,6 +163,9 @@ def compute_and_save_tdi_channels(
         tdi_dict[tdi_names[i]] = TimeSeries(tdi_data * window, t0=t0, dt=dt)
 
     # SAVE TDI CHANNEL DATA TO FILE
+    if os.path.exists(tdi_output_h5_path):
+        os.remove(tdi_output_h5_path)
+        
     tdi_dict.write(tdi_output_h5_path, overwrite=True)
 
 

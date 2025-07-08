@@ -5,3 +5,11 @@ glitch_0:
   t_rise: 5
   t_fall: 20
   level: 5e3
+
+# glitch_0:
+#   shape: "OneSidedDoubleExpGlitch"
+#   inj_point: "readout_isi_carrier_31"
+#   t_inj: 43200
+#   t_rise: 10
+#   t_fall: 10
+#   level: 1084

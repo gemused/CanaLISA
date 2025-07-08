@@ -172,44 +172,6 @@ def init_tdi_data(tdi_input_h5, tdi_channel_A, tdi_channel_B, t_range, dt, t_0):
     return tdi_A, tdi_B
 
 
-def initialize_data(
-    glitch_input_txt, simulation_input_h5, tdi_input_h5, interferometer, mosa,
-    tdi_channel, glitch_i, t_window
-):
-    glitch_info = np.genfromtxt(PATH_glitch_data + glitch_input_txt)
-    t_g = glitch_info[1:, 5][glitch_i]
-    t_0 = glitch_info[1:, 4][0]
-    dt = glitch_info[1:, 2][0]
-
-    t_range = t_g - t_0 + (-1 * t_window[0], t_window[1])
-    
-    i_range = (int(t_range[0] / dt), int(t_range[1] / dt))
-
-    delay_data = {}
-
-    with h5py.File(PATH_simulation_data + simulation_input_h5, "r") as sim_file:
-        sim_data = TimeSeries(
-            sim_file[interferometer][mosa][i_range[0]:i_range[1]],
-            delta_t=dt,
-            epoch=t_0,
-        )
-        for mosa in MOSAS:
-            delay_data[mosa] = TimeSeries(
-                sim_file["mprs"][mosa][i_range[0]:i_range[1]],
-                delta_t=dt,
-                epoch=t_0,
-            )
-
-    with h5py.File(PATH_tdi_data + tdi_input_h5, "r") as tdi_file:
-        tdi_data = TimeSeries(
-            tdi_file[tdi_channel][i_range[0]:i_range[1]],
-            delta_t=dt,
-            epoch=t_0,
-        )
-
-    return sim_data, delay_data, tdi_data, t_g + (-1 * t_window[0], t_window[1])
-
-
 def data_to_equation(equation, delay_data, t_range):
     # SUM DELAYS
     for term in equation:
@@ -316,59 +278,112 @@ def compute_averaged_model(
     return model
 
 
-def compute_overlap(sim_data, model, psd_data_h5):
+def compute_overlap(sim_data, model, interferometer, tdi_channel_A, tdi_channel_B, mosa, glitch_i):
+    # if interferometer.lower() == "isi":
+    #     psd_data_h5 = interferometer + "_psd.hdf"
+    # else:
+    psd_data_h5 = tdi_channel_A + tdi_channel_B + "_psd.hdf"
+
     psd_fs = load_frequencyseries(PATH_psd_data + psd_data_h5)
     df = psd_fs.delta_f
 
     sim_data_fs = sim_data.to_frequencyseries(delta_f=df)
     model_fs = model.to_frequencyseries(delta_f=df)
+    
+    index = int(len(sim_data_fs.get_sample_frequencies())/2)
 
-    overlap = matchedfilter.overlap(model_fs, sim_data_fs, psd=psd_fs)
+    sim_data_fs = sim_data_fs[:index]
+    model_fs = model_fs[:index]
+    psd_fs = psd_fs[:index]
+
+    # overlap = matchedfilter.overlap(model_fs, sim_data_fs, psd=psd_fs)#, normalized=False)
+
+    overlap = 0
+    for f in sim_data_fs.get_sample_frequencies():
+        overlap += np.abs(sim_data_fs.at_frequency(f) - model_fs.at_frequency(f))**2/psd_fs.at_frequency(f)
+
+    figure, axis = plt.subplots(2, 1, figsize=(8, 8))
+
+    # axis[0].plot(
+    #     sim_data_fs.get_sample_frequencies(),
+    #     sim_data_fs,
+    #     label="sim",
+    # )
+    # axis[0].plot(
+    #     model_fs.get_sample_frequencies(),
+    #     model_fs,
+    #     label=str(abs(overlap)),
+    # )
+    axis[0].plot(
+        psd_fs.get_sample_frequencies(),
+        psd_fs,
+        label="psd",
+    )
+
+    axis[0].legend(loc="upper right")
+
+    plt.savefig(PATH_tdi_backtracking_plots + str(glitch_i) + "_" + interferometer + "_" + mosa + ".png")
 
     return round(abs(overlap), 3)
 
 
-def plot(sim_data, tdi_A, tdi_B, model, overlap, plot_output):
+def plot(sim_data, tdi_data_A, tdi_data_B, tdi_channel_A, tdi_channel_B, model, overlap, plot_output):
     figure, axis = plt.subplots(3, 1, figsize=(8, 8), height_ratios=[3, 1, 1])
 
     axis[0].plot(
         model.sample_times,
         model,
         label="Overlap: " + str(overlap),
+        # label="Model",
     )
     axis[0].plot(
         sim_data.sample_times,
         sim_data,
+        label="Interferometer Data",
     )
     axis[0].set_title("Sim and Reconstructions")
     axis[0].legend(loc="upper right")
 
-    axis[1].plot(tdi_A.sample_times, tdi_A)
-    axis[1].set_title("TDI X")
+    axis[1].plot(tdi_data_A.sample_times, tdi_data_A)
+    axis[1].set_title("TDI " + tdi_channel_A)
 
-    axis[2].plot(tdi_B.sample_times, tdi_B)
-    axis[2].set_title("TDI Y")
+    axis[2].plot(tdi_data_B.sample_times, tdi_data_B)
+    axis[2].set_title("TDI " + tdi_channel_B)
 
     plt.subplots_adjust(hspace=0.5)
+
+    # figure, axis = plt.subplots(2, 1, figsize=(8, 6))#, height_ratios=[3, 1, 1])
+
+    # axis[0].plot(
+    #     sim_data.sample_times,
+    #     sim_data,
+    # )
+    # axis[1].plot(tdi_data_A.sample_times, tdi_data_A)
 
     plt.savefig(PATH_tdi_backtracking_plots + plot_output)
 
 
 def tdi_backtracking(
     glitch_input_txt, simulation_input_h5, tdi_input_h5,
-    plot=False
+    make_plots=False
 ):
-    glitch_info = np.genfromtxt(PATH_glitch_data + glitch_input_txt, dtype=str)
-    expected_inj_points = glitch_info[1:, 1]
-    levels = glitch_info[1:, 7]
+    glitch_info_str = np.genfromtxt(PATH_glitch_data + glitch_input_txt, dtype=str)
+    glitch_info_int = np.genfromtxt(PATH_glitch_data + glitch_input_txt, dtype=int)
+    expected_inj_points = glitch_info_str[1:, 1]
+    levels = glitch_info_int[1:, 7]
+    t_rises = glitch_info_int[1:, 8]
+    t_falls = glitch_info_int[1:, 9]
     num_glitches = len(expected_inj_points)
 
     predicted_inj_points = []
-    
+
     for glitch_i in range(num_glitches):
+    # for glitch_i in range(244,246):
         overlaps = {}
         for interferometer in INTERFEROMETERS:
             for mosa in MOSAS:
+                print(f"{glitch_i} out of {num_glitches - 1}")
+
                 t_range, dt, t_0 = init_gltich_info(
                     glitch_input_txt=glitch_input_txt,
                     glitch_i=glitch_i,
@@ -407,25 +422,49 @@ def tdi_backtracking(
                     t_range=t_range,
                 )
 
+                duration = (t_rises[glitch_i] + t_falls[glitch_i]) * 4
+                sim_data = sim_data[:int(duration/dt)]
+                model = model[:int(duration/dt)]
+
                 overlap = compute_overlap(
                     sim_data=sim_data,
                     model=model,
-                    psd_data_h5=tdi_channel_A + tdi_channel_B + "_psd.hdf",
+                    interferometer=interferometer,
+                    tdi_channel_A=tdi_channel_A,
+                    tdi_channel_B=tdi_channel_B,
+                    mosa=mosa, #delete later
+                    glitch_i=glitch_i,
                 )
 
                 overlaps[interferometer + "_" + mosa] = overlap
                 
-                if plot:
+                if make_plots:
                     plot(
                         sim_data=sim_data,
-                        tdi_X=tdi_data_A,
-                        tdi_Y=tdi_data_B,
+                        tdi_data_A=tdi_data_A,
+                        tdi_data_B=tdi_data_B,
+                        tdi_channel_A=tdi_channel_A,
+                        tdi_channel_B=tdi_channel_B,
                         model=model,
                         overlap=overlap,
-                        plot_output=interferometer + "backtracking_plot.png",
+                        plot_output=str(glitch_i) + "_" + interferometer + "_" + mosa + ".png",
                     )
 
-        predicted_inj_point = max(overlaps, key=overlaps.get)
+        # delta_chi_squares = {}
+
+        # for key1, value1 in overlaps.items():
+        #     print(f"interferometer: {key1}, d_chi: {value1}")
+        #     for key2, value2 in overlaps.items():
+        #         total = 0
+        #         if key2 != key1:
+        #             total += value2
+        #         mean = total / (len(overlaps.items()) - 1)
+        #     delta_chi_squares[key1] = abs(mean - value1)
+        
+        # for key, value in delta_chi_squares.items():
+        #     print(f"interferometer: {key}, d_chi: {value}")
+
+        predicted_inj_point = min(overlaps, key=overlaps.get)
         predicted_inj_points.append(predicted_inj_point)
 
     num_success = 0
@@ -443,7 +482,7 @@ def tdi_backtracking(
         else:
             print(f"{i} -- PREDICTED: {predicted_inj_point} EXPECTED: {expected_inj_point}")
             print(f"LEVEL: {levels[i]}")
-            print("FAIL")
+            print("UNSUCCESSFUL")
 
     print(f"{num_success}/{num_glitches} inj_points identified successfuly")
 
@@ -453,4 +492,12 @@ if __name__ == "__main__":
         glitch_input_txt="default_glitch_output.txt",
         simulation_input_h5="default_simulation_output.h5",
         tdi_input_h5="default_tdi_output.h5",
+        make_plots=False,
     )
+
+    # tdi_backtracking(
+    #     glitch_input_txt="big2.txt",
+    #     simulation_input_h5="big2.h5",
+    #     tdi_input_h5="big2.h5",
+    #     make_plots=False,
+    # )
