@@ -1,49 +1,57 @@
+absl-py==2.3.0
 anyio==4.3.0
-appnope==0.1.4
+appnope @ file:///Users/ktietz/ci_310/appnope_1643965056645/work
 argon2-cffi==23.1.0
 argon2-cffi-bindings==21.2.0
 arrow==1.3.0
-astropy==6.0.1
-astropy-iers-data==0.2024.5.13.0.30.12
+astropy @ file:///Users/runner/miniforge3/conda-bld/astropy_1732730203545/work
+astropy-iers-data==0.2025.6.23.0.39.50
 asttokens==2.4.1
+astunparse==1.6.3
 async-lru==2.0.4
 attrs==23.2.0
+audioread==3.0.1
 Babel==2.15.0
 beautifulsoup4==4.12.3
 bleach==6.1.0
 certifi==2024.2.2
 cffi==1.16.0
 charset-normalizer==3.3.2
-comm==0.2.2
+cloudpickle @ file:///private/var/folders/nz/j6p8yfhx1mv_0grj5xl4650h0000gp/T/abs_15c4lneh7c/croot/cloudpickle_1721657359029/work
+comm @ file:///private/var/folders/k1/30mswbxs7r1g6zwn8y4fyt500000gp/T/abs_3doui0bmzb/croot/comm_1709322861485/work
 contourpy==1.2.1
 corner==2.2.2
 cryptography==42.0.7
-cycler==0.12.1
+cycler @ file:///home/conda/feedstock_root/build_artifacts/cycler_1733332471406/work
 Cython==3.0.10
 dateparser==1.2.0
 debugpy==1.8.1
-decorator==5.1.1
+decorator @ file:///opt/conda/conda-bld/decorator_1643638310831/work
 defusedxml==0.7.1
 dqsegdb2==1.2.1
 emcee==3.1.6
-exceptiongroup==1.2.1
-executing==2.0.1
+exceptiongroup @ file:///private/var/folders/nz/j6p8yfhx1mv_0grj5xl4650h0000gp/T/abs_b2258scr33/croot/exceptiongroup_1706031391815/work
+executing @ file:///opt/conda/conda-bld/executing_1646925071911/work
 fastjsonschema==2.19.1
 filelock==3.15.3
+flatbuffers==25.2.10
 fonttools==4.51.0
 fqdn==1.5.1
 fsspec==2024.6.0
+gast==0.6.0
+google-pasta==0.2.0
+grpcio==1.73.1
 gwdatafind==1.2.0
 gwosc==0.7.1
 gwpy==3.0.8
 h11==0.14.0
 h5py==3.11.0
-healpy==1.16.6
+healpy @ file:///Users/runner/miniforge3/conda-bld/healpy_1744142536416/work
 httpcore==1.0.5
 httpx==0.27.0
 idna==3.7
 igwn-auth-utils==1.1.0
-importlib_metadata==7.1.0
+importlib_metadata @ file:///home/conda/feedstock_root/build_artifacts/bld/rattler-build_importlib-metadata_1747934053/work
 importlib_resources==6.4.0
 ipykernel==6.29.4
 ipython==8.18.1
@@ -51,6 +59,7 @@ ipywidgets==8.1.2
 isoduration==20.11.0
 jedi==0.19.1
 Jinja2==3.1.4
+joblib==1.5.1
 json5==0.9.25
 jsonpointer==2.4
 jsonschema==4.22.0
@@ -60,63 +69,79 @@ jupyter-console==6.6.3
 jupyter-events==0.10.0
 jupyter-lsp==2.2.5
 jupyter_client==8.6.1
-jupyter_core==5.7.2
+jupyter_core @ file:///private/var/folders/nz/j6p8yfhx1mv_0grj5xl4650h0000gp/T/abs_73nomeum4p/croot/jupyter_core_1718818302815/work
 jupyter_server==2.14.0
 jupyter_server_terminals==0.5.3
 jupyterlab==4.1.8
 jupyterlab_pygments==0.3.0
 jupyterlab_server==2.27.1
 jupyterlab_widgets==3.0.10
+keras==3.10.0
 kiwisolver==1.4.5
 lalsuite==7.22
+lazy_loader==0.4
+libclang==18.1.1
+librosa==0.11.0
 ligo-segments==1.4.0
 ligotimegps==2.0.1
-/Users/william/Documents/LDC
-lisaconstants==1.3.4
+lisa-data-challenge @ file:///Users/theo/Projects/Repositories/LISA/LDC
+lisaconstants==1.3.6
 lisaglitch==1.3
-lisagwresponse==2.3
--e git+ssh://gitlab.com/ubc-gws/lisa-hierarchical-triples.git@22c727e2ed1cee163e7254f5fbd1c20a05642fb4#egg=lisaHTI
+lisagwresponse==2.5.0
 lisainstrument==1.4
-lisaorbits==2.3
+lisaorbits==2.4.2
+llvmlite==0.44.0
 lscsoft-glue==4.0.0
 lxml==5.2.2
 Mako==1.3.5
+Markdown==3.8.2
+markdown-it-py==3.0.0
 MarkupSafe==2.1.5
 matplotlib==3.8.4
-matplotlib-inline==0.1.7
+matplotlib-inline @ file:///private/var/folders/nz/j6p8yfhx1mv_0grj5xl4650h0000gp/T/abs_f6fdc0hldi/croots/recipe/matplotlib-inline_1662014472341/work
+mdurl==0.1.2
 mistune==3.0.2
+ml_dtypes==0.5.1
 mpld3==0.5.10
 mpmath==1.3.0
+msgpack==1.1.1
+munkres==1.1.4
+namex==0.1.0
 natsort==8.4.0
 nbclient==0.10.0
 nbconvert==7.16.4
 nbformat==5.10.4
-nest-asyncio==1.6.0
+nest-asyncio @ file:///private/var/folders/k1/30mswbxs7r1g6zwn8y4fyt500000gp/T/abs_310vb5e2a0/croot/nest-asyncio_1708532678212/work
 networkx==3.2.1
 notebook==7.1.3
 notebook_shim==0.2.4
+numba==0.61.2
 numpy==1.26.4
 oem==0.4.2
+opencv-python==4.11.0.86
+opt_einsum==3.4.0
+optree==0.16.0
 overrides==7.7.0
 packaging==24.0
 pandas==2.2.2
 pandocfilters==1.5.1
-parso==0.8.4
+parso @ file:///private/var/folders/nz/j6p8yfhx1mv_0grj5xl4650h0000gp/T/abs_8824a1w4md/croot/parso_1733963320105/work
 patsy==0.5.6
 pegasus-wms.api==5.0.7
 pegasus-wms.common==5.0.7
-pexpect==4.9.0
+pexpect @ file:///private/var/folders/k1/30mswbxs7r1g6zwn8y4fyt500000gp/T/abs_93wbojua0f/croot/pexpect_1750072609163/work
 pillow==10.3.0
 platformdirs==4.2.1
 plottable==0.1.5
 pooch==1.8.1
 prettytable==3.10.0
 prometheus_client==0.20.0
-prompt-toolkit==3.0.43
-psutil==5.9.8
+prompt-toolkit @ file:///private/var/folders/k1/30mswbxs7r1g6zwn8y4fyt500000gp/T/abs_c63v4kqjzr/croot/prompt-toolkit_1704404354115/work
+protobuf==5.29.5
+psutil @ file:///private/var/folders/k1/30mswbxs7r1g6zwn8y4fyt500000gp/T/abs_10oa1k8l11/croot/psutil_1736367646006/work
 ptemcee==1.0.0
-ptyprocess==0.7.0
-pure-eval==0.2.2
+ptyprocess @ file:///tmp/build/80754af9/ptyprocess_1609355006118/work/dist/ptyprocess-0.7.0-py2.py3-none-any.whl
+pure-eval @ file:///opt/conda/conda-bld/pure_eval_1646925070566/work
 PyCBC==2.4.0
 pycparser==2.22
 pyerfa==2.0.1.4
@@ -126,9 +151,10 @@ pykerr==0.1.0
 pyOpenSSL==24.1.0
 pyparsing==3.1.2
 pytdi==1.3.1
-python-dateutil==2.9.0.post0
+python-dateutil @ file:///private/var/folders/k1/30mswbxs7r1g6zwn8y4fyt500000gp/T/abs_66ud1l42_h/croot/python-dateutil_1716495741162/work
 python-json-logger==2.0.7
 python-ligo-lw==1.8.3
+pyts==0.13.0
 pytz==2024.1
 PyYAML==6.0.1
 pyzmq==26.0.3
@@ -139,35 +165,50 @@ regex==2024.5.10
 requests==2.31.0
 rfc3339-validator==0.1.4
 rfc3986-validator==0.1.1
+rich==14.0.0
 rpds-py==0.18.1
 safe-netrc==1.0.1
-scipy==1.13.0
+scikit-learn==1.7.0
+scipy @ file:///Users/runner/miniforge3/conda-bld/scipy-split_1739790705989/work/dist/scipy-1.15.2-cp310-cp310-macosx_11_0_arm64.whl#sha256=7edcf528c303a2d0aa5afa5be176589f18a84d21a8d85f1972553ab95cab0933
 scitokens==1.8.1
 Send2Trash==1.8.3
 six==1.16.0
 sniffio==1.3.1
+soundfile==0.13.1
 soupsieve==2.5
-stack-data==0.6.3
+soxr==0.5.0.post1
+spyder-kernels @ file:///private/var/folders/nz/j6p8yfhx1mv_0grj5xl4650h0000gp/T/abs_f1f2blkxlb/croot/spyder-kernels_1748642516744/work
+stack-data @ file:///opt/conda/conda-bld/stack_data_1646927590127/work
 statsmodels==0.14.2
 sympy==1.12.1
+tensorboard==2.19.0
+tensorboard-data-server==0.7.2
+tensorflow==2.19.0
+tensorflow-io-gcs-filesystem==0.37.1
+termcolor==3.1.0
 terminado==0.18.1
+threadpoolctl==3.6.0
 tinycss2==1.3.0
 tomli==2.0.1
 torch==2.2.2
 torchinfo==1.8.0
 tornado==6.4
 tqdm==4.66.4
-traitlets==5.14.3
+traitlets @ file:///private/var/folders/k1/30mswbxs7r1g6zwn8y4fyt500000gp/T/abs_500m2_1wyk/croot/traitlets_1718227071952/work
 types-python-dateutil==2.9.0.20240316
 typing_extensions==4.11.0
 tzdata==2024.1
 tzlocal==5.2
+unicodedata2 @ file:///Users/runner/miniforge3/conda-bld/unicodedata2_1736692581912/work
 uri-template==1.3.0
 urllib3==2.2.1
-wcwidth==0.2.13
+wcwidth @ file:///private/var/folders/k1/30mswbxs7r1g6zwn8y4fyt500000gp/T/abs_8el7txr34i/croot/wcwidth_1750352901095/work
 webcolors==1.13
 webencodings==0.5.1
 websocket-client==1.8.0
+Werkzeug==3.1.3
 widgetsnbextension==4.0.10
+wrapt==1.17.2
+wurlitzer @ file:///Users/ktietz/ci_310/wurlitzer_1643969655374/work
 xarray==2024.5.0
-zipp==3.18.1
+zipp @ file:///home/conda/feedstock_root/build_artifacts/zipp_1749421620841/work

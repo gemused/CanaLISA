@@ -6,7 +6,6 @@ from gwpy.timeseries import TimeSeries, TimeSeriesDict
 from lisainstrument import Instrument
 from pytdi import Data
 import argparse
-import matplotlib.pyplot as plt
 
 
 PATH_src = os.path.abspath(os.path.join(os.getcwd(), os.pardir))
@@ -67,6 +66,8 @@ def init_cl():
         help="Simulate LISA instruments without noise?"
     )
 
+
+
     return parser.parse_args()
 
 
@@ -126,8 +127,8 @@ def simulate_lisa(
 
     lisa_instrument.write(simulation_output_h5_path)
 
-    lisa_instrument.plot_fluctuations(output=PATH_interferometer_plots
-                                      + "fluctuations.png")
+    # lisa_instrument.plot_fluctuations(output=PATH_interferometer_plots
+                                    #   + "fluctuations.png")
 
 
 def compute_and_save_tdi_channels(
@@ -165,9 +166,9 @@ def compute_and_save_tdi_channels(
     # SAVE TDI CHANNEL DATA TO FILE
     if os.path.exists(tdi_output_h5_path):
         os.remove(tdi_output_h5_path)
-        
     tdi_dict.write(tdi_output_h5_path, overwrite=True)
 
+    
 
 def inject_glitch(
     orbit_input_h5, glitch_input_h5, glitch_input_txt, simulation_output_h5,

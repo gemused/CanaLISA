@@ -1,0 +1,23 @@
+#!/bin/bash
+
+# Run with bash multiprocess.txt 2> /dev/null
+# Kill by going into terminal and killing all python subprocesses
+
+compute_seg() {
+    python main.py --process $1 --pipe_cfg_input $pipe_cfg_input --glitch_cfg_input $glitch_cfg_input --tdi_output_h5 "$1$tdi_output_h5" --glitch_output_txt "$1$glitch_output_txt" --glitch_output_h5 "$1$glitch_output_h5" --simulation_output_h5 "$1$simulation_output_h5"
+}
+
+glitch_cfg_input="glitch_cfg_large_one_sided_exp.yml"
+pipe_cfg_input="pipeline_cfg.yml"
+tdi_output_h5="_2_tdi_output.h5"
+glitch_output_txt="_2_glitch_output.txt"
+glitch_output_h5="_2_glitch_output.h5"
+simulation_output_h5="_2_simulation_output.h5"
+
+num_processes=100
+
+for ((i=0; i<$num_processes; i++))
+do
+    echo $i
+    compute_seg $i 
+done

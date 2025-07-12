@@ -1,2 +1,0 @@
-shape  inj_point size  dt  physics_upsampling  t0  t_inj level t_rise t_fall 
-OneSidedDoubleExpGlitch  readout_isi_carrier_12 345600.0  0.25  1  10368000  10411200 5e3 5 20

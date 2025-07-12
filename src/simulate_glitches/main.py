@@ -70,6 +70,15 @@ def init_cl():
         help="Seed to ensure deterministic outputs"
     )
 
+    parser.add_argument(
+        "--process",
+        type=str,
+        default=0,
+        help="Process number"
+    )
+
+    
+
     return parser.parse_args()
 
 
@@ -90,3 +99,12 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
+'''
+python main.py --pipe_cfg_input pipeline_cfg.yml --glitch_cfg_input glitch_cfg_large_one_sided_exp.yml
+python main.py --pipe_cfg_input pipeline_cfg.yml --glitch_cfg_input glitch_cfg_one_sided_exp.yml
+python main.py --pipe_cfg_input pipeline_cfg.yml --glitch_cfg_input glitch_cfg_large_one_sided_exp.yml --tdi_output_h5 tdi14d60gpd.h5 --glitch_output_txt glitch14d60gpd.txt --glitch_output_h5 glitch14d60gpd.h5
+python main.py --pipe_cfg_input pipeline_cfg.yml --glitch_cfg_input glitch_cfg_large_one_sided_exp.yml --tdi_output_h5 tdi10d60gpd.h5 --glitch_output_txt glitch10d60gpd.txt --glitch_output_h5 glitch10d60gpd.h5
+'''
+
