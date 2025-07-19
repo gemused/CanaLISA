@@ -1,0 +1,24 @@
+shape: "OneSidedDoubleExpGlitch"
+inj_points:
+  - "readout_isi_carrier_12"
+  - "readout_isi_carrier_23"
+  - "readout_isi_carrier_31"
+  - "readout_isi_carrier_13"
+  - "readout_isi_carrier_32"
+  - "readout_isi_carrier_21"
+  - "readout_tmi_carrier_12"
+  - "readout_tmi_carrier_23"
+  - "readout_tmi_carrier_31"
+  - "readout_tmi_carrier_13"
+  - "readout_tmi_carrier_32"
+  - "readout_tmi_carrier_21"
+  - "readout_rfi_carrier_12"
+  - "readout_rfi_carrier_23"
+  - "readout_rfi_carrier_31"
+  - "readout_rfi_carrier_13"
+  - "readout_rfi_carrier_32"
+  - "readout_rfi_carrier_21"
+daily_rate: 10
+t_rise_range: [5, 20]
+t_fall_range: [5, 20]
+level_range: [1.2e2, 5e3]

@@ -1,0 +1,28 @@
+#!/bin/bash
+
+# Run with bash multi_process.txt 2> /dev/null
+# Kill by going into terminal and killing all python subprocesses
+
+compute_seg() {
+    python tdi_backtracking.py --glitch_input_txt $glitch_input_txt --simulation_input_h5 $simulation_input_h5 --tdi_input_h5 $tdi_input_h5 --min_glitch_i $(($1 * $seg_len)) --max_glitch_i $(((($1 + 1)) * $seg_len)) --process $1
+}
+
+#glitch_input_txt="default_glitch_output.txt"
+#simulation_input_h5="default_simulation_output.h5"
+#tdi_input_h5="default_tdi_output.h5"
+
+glitch_input_txt="big1000.txt"
+simulation_input_h5="big1000.h5"
+tdi_input_h5="big1000.h5"
+
+num_processes=10
+num_glitches=1000
+seg_len=$((num_glitches/num_processes))
+
+min_glitch_i=0
+max_glitch_i=$seg_len
+
+for ((i=0; i<$num_processes; i++))
+do
+    compute_seg $i &
+done
