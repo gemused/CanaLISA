@@ -5,12 +5,15 @@ import numpy as np
 PATH_src = os.path.abspath(os.path.join(os.getcwd(), os.pardir))
 PATH_bethLISA = os.path.abspath(os.path.join(PATH_src, os.pardir))
 PATH_tdi_backtracking_plots = os.path.join(PATH_bethLISA,
-                                           "dist/tdi_backtracking_plots/")
+                                           "dist/tdi_backtracking/plots/")
 PATH_tdi_backtracking_results = os.path.join(PATH_bethLISA,
-                                             "dist/tdi_backtracking_results/")
-GLITCH_CANDIDATE_THRESHOLD = 5
-OUTLIERS_THRESHOLD_MAX = 1
-OUTLIERS_THRESHOLD_MIN = 2
+                                             "dist/tdi_backtracking/results/")
+PATH_tdi_backtracking_performance_plots = os.path.join(PATH_bethLISA,
+                                                 "dist/tdi_backtracking/performance_plots/")
+INTERFEROMETERS = ["isi", "tmi", "rfi"]
+MOSAS = ["12", "23", "31", "13", "32", "21"]
+GLITCH_CANDIDATE_THRESHOLD = 6
+
 
 def plot_overlap(
     sim_data, sim_data_fs, tdi_data, tdi_channel, model, model_fs, psd,
@@ -111,7 +114,7 @@ def plot_level_performance(levels, identified, predicted, expected, num_ranges):
     axis[1].bar(level_ranges, totals, align="edge", width=1)
     axis[1].set_title("Totals")
 
-    plt.savefig(PATH_tdi_backtracking_plots + "performance.png")
+    plt.savefig(PATH_tdi_backtracking_plots + "level_performance.png")
 
 
 def print_success_rate(levels, identified, predicted, expected):
@@ -135,7 +138,7 @@ def print_interferometer_disribution(predicted, expected):
     }
 
     for i in range(len(levels)):
-        if predicted[i] != expected[i] and predicted[i] != "gw":
+        if predicted[i] != expected[i] and expected[i] != "gw":
             distribution[expected[i][:3]][predicted[i][:3]] += 1
 
     for key, value in distribution.items():
@@ -156,6 +159,134 @@ def examine_std(std, identified):
     print(f"Unidentified -- Mean: {np.mean(unidentified_std)} -- Min: {min(unidentified_std)} -- Max: {max(unidentified_std)} -- STD: {np.std(unidentified_std)}")
 
 
+def plot_anomaly_outlier_distributions(glitches, gws):
+    glitch_success_outliers = []
+    glitch_unsuccess_outliers = []
+    gw_outliers = []
+
+    for glitch in glitches:
+        if glitch["expected"] == glitch["predicted"]:
+            glitch_success_outliers.append(max(glitch["outliers"].items(), key=lambda x: x[1])[1])
+        else:
+            glitch_unsuccess_outliers.append(max(glitch["outliers"].items(), key=lambda x: x[1])[1])
+    
+    for gw in gws:
+        gw_outliers.append(max(gw["outliers"].items(), key=lambda x: x[1])[1])
+    
+    figure, axis = plt.subplots(1, 1, figsize=(8, 4))
+
+    max_bin = int(max(glitch_success_outliers + glitch_unsuccess_outliers)) + 1
+    step = 0.1
+    bins = [step * i for i in range(int(max_bin / step))]
+    # bins = [step * i for i in range(int(8 / step))]
+
+    axis.hist(gw_outliers, bins=bins, label="GW")
+    axis.hist(glitch_success_outliers, bins=bins, label="Glitch Success")
+    axis.hist(glitch_unsuccess_outliers, bins=bins, label="Glitch Unsuccess")
+    axis.axvline(GLITCH_CANDIDATE_THRESHOLD, ls="--", c="red")
+    axis.legend(loc="upper right")
+    axis.set_title("Anomaly Outlier Distribution")
+
+    plt.savefig(PATH_tdi_backtracking_performance_plots + "anomaly_outlier_distrbution.png")
+
+
+def init_anomalies(levels, predicted, expected, outliers):
+    anomalies = []
+    gws = []
+    glitches = []
+
+    for i in range(len(levels)):
+        outlier_dict = {}
+        j = 0
+        for interferometer in INTERFEROMETERS:
+            for mosa in MOSAS:
+                outlier_dict[f"{interferometer}_{mosa}"] = outliers[i][j]
+                j += 1
+
+        if max(outliers[i]) < GLITCH_CANDIDATE_THRESHOLD:
+            suspect_gw = True
+        else:
+            suspect_gw = False
+
+        anomaly = {
+            "i": i,
+            "level": levels[i],
+            "predicted": predicted[i],
+            "expected": expected[i],
+            "suspect_gw": suspect_gw,
+            "outliers": outlier_dict,
+        }
+
+        anomalies.append(anomaly)
+
+        if anomaly["expected"] == "gw":
+            gws.append(anomaly)
+        else:
+            glitches.append(anomaly)
+
+    return anomalies, gws, glitches
+
+
+def filter_anomalies(anomalies, condition):
+    subset = []
+    for anomaly in anomalies:
+        if condition(anomaly):
+            subset.append(anomaly)
+    return subset
+
+
+def print_anomaly(anomaly):
+    print(f"{anomaly['i']} -- SUSPECT_GW: {anomaly['suspect_gw']} -- PREDICTED: {anomaly['predicted']} -- EXPECTED: {anomaly['expected']} -- LEVEL: {anomaly['level']} -- OUTLIER: {max(list(anomaly['outliers'].values()))}")
+
+
+def print_performance(glitches, gws):
+    print("~~~~~~~~~~ Anomaly Classification ~~~~~~~~~~")
+    print("False Positives:")
+    false_positives = filter_anomalies(
+        anomalies=glitches,
+        condition=lambda x: x["suspect_gw"]
+    )
+    for false_positive in false_positives:
+        print_anomaly(false_positive)
+    print(f"False positive rate: {len(false_positives)}/{len(glitches)}={len(false_positives)/len(glitches)}\n")
+
+    print("False Negatives:")
+    false_negatives = filter_anomalies(
+        anomalies=gws,
+        condition=lambda x: not x["suspect_gw"]
+    )
+    for false_negative in false_negatives:
+        print_anomaly(false_negative)
+    print(f"False negative rate: {len(false_negatives)}/{len(gws)}={len(false_negatives)/len(gws)}\n")
+
+    print("Correctly Identified GW:")
+    correct_gws = filter_anomalies(
+        anomalies=gws,
+        condition=lambda x: x["suspect_gw"]
+    )
+    print(f"Correctly identified gws: {len(correct_gws)}/{len(gws)}={len(correct_gws)/len(gws)}\n")
+
+    print("~~~~~~~~~~ Glitch Identification ~~~~~~~~~~")
+    print("Incorrectly Identified:")
+    incorrect_glitches = filter_anomalies(
+        anomalies=glitches,
+        condition=lambda x: x["predicted"] != x["expected"] and x["expected"] != "gw"
+    )
+    for incorrect_glitch in incorrect_glitches:
+        print_anomaly(incorrect_glitch)
+    print(f"Successful glitch identification rate: {(len(glitches) - len(incorrect_glitches))}/{len(glitches)}={1 - len(incorrect_glitches)/len(glitches)}\n")
+
+    print("Correctly Identified but False Positive:")
+    correct_and_false_positives = filter_anomalies(
+        anomalies=glitches,
+        condition=lambda x: x["predicted"] == x["expected"] and x["suspect_gw"]
+    )
+    for correct_and_false_positive in correct_and_false_positives:
+        print_anomaly(correct_and_false_positive)
+    print(f"Correct identification but false positive rate: {len(correct_and_false_positives)}/{len(glitches)}={len(correct_and_false_positives)/len(glitches)}\n")
+
+
+
 if __name__ == "__main__":
     num_seg = len(os.listdir(PATH_tdi_backtracking_results))
 
@@ -168,32 +299,50 @@ if __name__ == "__main__":
     expected = []
     outliers = []
 
+    fn = "results_250"
+
     for i in range(num_seg):
-        glitch_info_str = np.genfromtxt(PATH_tdi_backtracking_results + f"{i}results.txt", dtype=str)
-        glitch_info_float = np.genfromtxt(PATH_tdi_backtracking_results + f"{i}results.txt", dtype=float)
+        glitch_info_str = np.genfromtxt(PATH_tdi_backtracking_results + f"{i}{fn}.txt", dtype=str)
+        glitch_info_float = np.genfromtxt(PATH_tdi_backtracking_results + f"{i}{fn}.txt", dtype=float)
 
         levels += map(int, list(glitch_info_float[0:, 1]))
-        identified += list(glitch_info_str[0:, 2])
-        predicted += list(glitch_info_str[0:, 3])
-        expected += list(glitch_info_str[0:, 4])
-        outliers += list(glitch_info_float[0:, 5:])
+        predicted += list(glitch_info_str[0:, 2])
+        expected += list(glitch_info_str[0:, 3])
+        outliers += list(glitch_info_float[0:, 4:])
 
-    plot_level_performance(
+    anomalies, gws, glitches = init_anomalies(
         levels=levels,
-        identified=identified,
         predicted=predicted,
         expected=expected,
-        num_ranges=20,
+        outliers=outliers,
     )
 
-    print_success_rate(
-        levels=levels,
-        identified=identified,
-        predicted=predicted,
-        expected=expected,
+    print_performance(
+        glitches=glitches,
+        gws=gws,
     )
 
-    print_interferometer_disribution(
-        predicted=predicted,
-        expected=expected,
+    # plot_level_performance(
+    #     levels=levels,
+    #     identified=identified,
+    #     predicted=predicted,
+    #     expected=expected,
+    #     num_ranges=100,
+    # )
+
+    # print_success_rate(
+    #     levels=levels,
+    #     identified=identified,
+    #     predicted=predicted,
+    #     expected=expected,
+    # )
+
+    # print_interferometer_disribution(
+    #     predicted=predicted,
+    #     expected=expected,
+    # )
+
+    plot_anomaly_outlier_distributions(
+        glitches=glitches,
+        gws=gws,
     )

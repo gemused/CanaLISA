@@ -11,14 +11,14 @@ from performance_analysis import plot_overlap, plot_level_performance
 
 PATH_src = os.path.abspath(os.path.join(os.getcwd(), os.pardir))
 PATH_bethLISA = os.path.abspath(os.path.join(PATH_src, os.pardir))
-PATH_glitch_data = os.path.join(PATH_bethLISA, "dist/glitch_data/")
-PATH_simulation_data = os.path.join(PATH_bethLISA, "dist/simulation_data/")
-PATH_tdi_data = os.path.join(PATH_bethLISA, "dist/tdi_data/")
-PATH_psd_data = os.path.join(PATH_bethLISA, "dist/psd_data/")
+PATH_simulation_data = os.path.join(PATH_bethLISA, "dist/lisa_data/simulation_data/")
+PATH_tdi_data = os.path.join(PATH_bethLISA, "dist/lisa_data/tdi_data/")
 PATH_tdi_backtracking_plots = os.path.join(PATH_bethLISA,
-                                           "dist/tdi_backtracking_plots/")
+                                           "dist/tdi_backtracking/plots/")
 PATH_tdi_backtracking_results = os.path.join(PATH_bethLISA,
-                                             "dist/tdi_backtracking_results/")
+                                             "dist/tdi_backtracking/results/")
+PATH_anomaly_data = os.path.join(PATH_bethLISA, "dist/tdi_backtracking/anomaly_data/")
+PATH_pipe_data = os.path.join(PATH_bethLISA, "dist/pipe/pipe_data/")
 FREQUENCY_BAND_COEFF = 0.75
 INTERFEROMETERS = ["isi", "tmi", "rfi"]
 MOSAS = ["12", "23", "31", "13", "32", "21"]
@@ -113,35 +113,41 @@ def init_cl():
 
     # FILE MANAGEMENT
     parser.add_argument(
-        "--glitch_input_txt",
+        "--anomaly_input_fn",
         type=str,
-        default="default_glitch_output.txt",
-        help="Glitch input txt file name",
+        default="default_anomaly_output",
+        help="Anomoly input file name (excluding file extension)",
     )
     parser.add_argument(
-        "--simulation_input_h5",
+        "--simulation_input_fn",
         type=str,
-        default="default_simulation_output.h5",
-        help="Simulation input h5 file name",
+        default="default_simulation_output",
+        help="Simulation input file name (excluding file extension)",
     )
     parser.add_argument(
-        "--tdi_input_h5",
+        "--tdi_input_fn",
         type=str,
-        default="default_tdi_output.h5",
-        help="Tdi input h5 file name",
+        default="default_tdi_output",
+        help="Tdi input file name (excluding file extension)",
+    )
+    parser.add_argument(
+        "--pipe_input_fn",
+        type=str,
+        default="default_pipe_output",
+        help="Pipeline input file name (excluding file extension)",
     )
 
     # Scale
     parser.add_argument(
-        "--min_glitch_i",
+        "--min_anomaly_i",
         type=int,
         default=0,
-        help="Start glitch index to run algorithm",
+        help="Start anomaly index to run algorithm",
     )
     parser.add_argument(
-        "--max_glitch_i",
+        "--max_anomaly_i",
         type=int,
-        help="End glitch index to run algorithm",
+        help="End anomaly index to run algorithm",
     )
 
     # Process
@@ -155,45 +161,44 @@ def init_cl():
     return parser.parse_args()
 
 
-def init_gltich_info(glitch_input_txt, glitch_i, t_window):
-    glitch_info = np.genfromtxt(PATH_glitch_data + glitch_input_txt)
-    t_g = glitch_info[1:, 6][glitch_i]
-    t_0 = glitch_info[1:, 5][0]
-    dt = glitch_info[1:, 3][0]
+def init_pipe_info(pipe_input_fn, anomaly_input_fn):
+    anomaly_info = np.genfromtxt(PATH_anomaly_data + anomaly_input_fn + ".txt")
+    pipe_info = np.genfromtxt(PATH_pipe_data + pipe_input_fn + ".txt")
 
-    t_range = t_g - t_0 + (-1 * t_window[0], t_window[1])
+    t0 = anomaly_info[1:, 5][0]
+    dt = anomaly_info[1:, 3][0]
 
-    return t_range, dt, t_0
+    return dt, t0
 
 
-def init_simulation_data(simulation_input_h5, interferometer, mosa, t_range, dt, t_0):
+def init_simulation_data(simulation_input_fn, interferometer, mosa, t_range, dt, t0):
     i_range = (int(t_range[0] / dt), int(t_range[1] / dt))
     delay_data = {}
 
-    with h5py.File(PATH_simulation_data + simulation_input_h5, "r") as sim_file:
+    with h5py.File(PATH_simulation_data + simulation_input_fn + ".h5", "r") as sim_file:
         sim_data = TimeSeries(
             sim_file[interferometer + "_carrier_fluctuations"][mosa][i_range[0]:i_range[1]],
             delta_t=dt,
-            epoch=t_0,
+            epoch=t0,
         )
         for mosa in MOSAS:
             delay_data[mosa] = TimeSeries(
                 sim_file["mprs"][mosa][i_range[0]:i_range[1]],
                 delta_t=dt,
-                epoch=t_0,
+                epoch=t0,
             )
 
     return sim_data, delay_data
 
 
-def init_tdi_data(tdi_input_h5, tdi_channel, t_range, dt, t_0):
+def init_tdi_data(tdi_input_fn, tdi_channel, t_range, dt, t0):
     i_range = (int(t_range[0] / dt), int(t_range[1] / dt))
 
-    with h5py.File(PATH_tdi_data + tdi_input_h5, "r") as tdi_file:
+    with h5py.File(PATH_tdi_data + tdi_input_fn + ".h5", "r") as tdi_file:
         tdi_data = TimeSeries(
             tdi_file[tdi_channel][i_range[0]:i_range[1]],
             delta_t=dt,
-            epoch=t_0,
+            epoch=t0,
         )
 
     return tdi_data
@@ -366,12 +371,14 @@ def compute_averaged_model(
 
 
 def compute_averaged_psd(data_segs, num_r, duration, dt):
-    seg_len = len(data_segs[0])
     psd = []
+
+    max_delta_f = 0.00125
+    nperseg = int(1/(dt * max_delta_f))
 
     for seg in data_segs:
         seg = seg[:int(duration / dt)]
-        seg_f, seg_psd = welch(seg, fs=int(1 / dt), nperseg=int(seg_len))
+        seg_f, seg_psd = welch(seg, fs=int(1 / dt), nperseg=nperseg)
 
         if not psd:
             psd = [0 for i in range(len(seg_f))]
@@ -396,12 +403,12 @@ def seg_data(data, num_r, duration, dt):
     return data_segs
 
 
-def compute_interferometer_psd(interferometer, mosa, num_r, duration, dt, t_0):
+def compute_interferometer_psd(interferometer, mosa, num_r, duration, dt, t0):
     with h5py.File(PATH_simulation_data + "psd_sample_simulation.h5", "r") as sim_file:
         sim_data = TimeSeries(
             sim_file[interferometer + "_carrier_fluctuations"][mosa],
             delta_t=dt,
-            epoch=t_0,
+            epoch=t0,
         )
 
     data_segs = seg_data(sim_data, num_r, duration, dt)
@@ -417,19 +424,19 @@ def compute_interferometer_psd(interferometer, mosa, num_r, duration, dt, t_0):
 
 
 def compute_model_psd(
-    interferometer, mosa, tdi_channel, delay_data, num_r, duration, dt, t_0
+    interferometer, mosa, tdi_channel, delay_data, num_r, duration, dt, t0
 ):
     with h5py.File(PATH_tdi_data + "psd_sample_tdi.h5", "r") as tdi_file:
         tdi_data = TimeSeries(
             tdi_file[tdi_channel],
             delta_t=dt,
-            epoch=t_0,
+            epoch=t0,
         )
 
     data_segs = seg_data(
         data=tdi_data,
         num_r=num_r,
-        duration=145, #EDIT
+        duration=duration, #EDIT
         dt=dt,
     )
 
@@ -442,7 +449,7 @@ def compute_model_psd(
                 interferometer=interferometer,
                 mosa=mosa,
                 delay_data=delay_data,
-                t_range=(0, 145), #EDIT
+                t_range=(0, duration), #EDIT
             )
         )
 
@@ -475,53 +482,57 @@ def compute_outliers(overlaps):
 
 
 def tdi_backtracking(
-    glitch_input_txt, simulation_input_h5, tdi_input_h5, min_glitch_i,
-    max_glitch_i, output_txt, make_plots=False,
+    anomaly_input_fn, simulation_input_fn, tdi_input_fn, pipe_input_fn,
+    min_anomaly_i, max_anomaly_i, results_output_fn, make_plots=False,
 ):
-    glitch_info_str = np.genfromtxt(PATH_glitch_data + glitch_input_txt, dtype=str)
-    glitch_info_int = np.genfromtxt(PATH_glitch_data + glitch_input_txt, dtype=int)
-    glitch_info_float = np.genfromtxt(PATH_glitch_data + glitch_input_txt, dtype=float)
-    expected_inj_points = glitch_info_str[1:, 1]
-    levels = glitch_info_float[1:, 7]
-    t_rises = glitch_info_int[1:, 8]
-    t_falls = glitch_info_int[1:, 9]
-    num_glitches = len(expected_inj_points)
+    anomaly_data_path = PATH_anomaly_data + anomaly_input_fn + ".txt"
+    pipe_data_path = PATH_pipe_data + pipe_input_fn + ".txt"
+    results_output_path = PATH_tdi_backtracking_results + results_output_fn + ".txt"
 
-    if not max_glitch_i:
-        max_glitch_i = num_glitches
+    anomaly_data_str = np.genfromtxt(anomaly_data_path, dtype=str)
+    anomaly_data_float = np.genfromtxt(anomaly_data_path, dtype=float)
+    pipe_data_float = np.genfromtxt(pipe_data_path, dtype=float)
 
-    if os.path.exists(PATH_tdi_backtracking_results + output_txt):
-        os.remove(PATH_tdi_backtracking_results + output_txt)
+    t0 = pipe_data_float[0]
+    dt = pipe_data_float[1]
 
-    num_success = 0
+    expected_inj_points = anomaly_data_str[0:, 1]
+    t_injs = anomaly_data_float[0:, 2]
+    levels = anomaly_data_float[0:, 3]
 
-    for glitch_i in range(min_glitch_i, max_glitch_i):
+    num_anomalies = len(expected_inj_points)
+
+    if not max_anomaly_i:
+        max_anomaly_i = num_anomalies
+
+    if os.path.exists(results_output_path):
+        os.remove(results_output_path)
+
+    for anomaly_i in range(min_anomaly_i, max_anomaly_i):
         overlaps = {}
+        t_inj = t_injs[anomaly_i]
         for interferometer in INTERFEROMETERS:
             for mosa in MOSAS:
                 tdi_overlaps = []
                 for tdi_channel in ETA_TDI[mosa]:
-                    t_range, dt, t_0 = init_gltich_info(
-                        glitch_input_txt=glitch_input_txt,
-                        glitch_i=glitch_i,
-                        t_window=(5, 140), # tdi sampling window in s
-                    )
+                    sample_duration = 140
+                    t_range = t_inj - t0 + (0, sample_duration)
 
                     sim_data, delay_data = init_simulation_data(
-                        simulation_input_h5=simulation_input_h5,
+                        simulation_input_fn=simulation_input_fn,
                         interferometer=interferometer,
                         mosa=mosa,
                         t_range=t_range,
                         dt=dt,
-                        t_0=t_0,
+                        t0=t0,
                     )
 
                     tdi_data = init_tdi_data(
-                        tdi_input_h5=tdi_input_h5,
+                        tdi_input_fn=tdi_input_fn,
                         tdi_channel=tdi_channel,
                         t_range=t_range,
                         dt=dt,
-                        t_0=t_0,
+                        t0=t0,
                     )
 
                     model = compute_single_model(
@@ -533,7 +544,7 @@ def tdi_backtracking(
                         t_range=t_range,
                     )
 
-                    duration = (t_rises[glitch_i] + t_falls[glitch_i]) * 3
+                    duration = 100
                     sim_data = sim_data[:int(duration/dt)]
                     model = model[:int(duration/dt)]
 
@@ -545,7 +556,7 @@ def tdi_backtracking(
                         num_r=num_r,
                         duration=duration,
                         dt=dt,
-                        t_0=t_0,
+                        t0=t0,
                     )
 
                     model_noise_psd = compute_model_psd(
@@ -556,7 +567,7 @@ def tdi_backtracking(
                         num_r=num_r,
                         duration=duration,
                         dt=dt,
-                        t_0=t_0,
+                        t0=t0,
                     )
 
                     idx_cutoff = int(len(model_noise_psd.get_sample_frequencies()) * FREQUENCY_BAND_COEFF)
@@ -579,7 +590,7 @@ def tdi_backtracking(
                             model_fs=model_fs,
                             psd=psd,
                             overlap=overlap,
-                            plot_output=f"{glitch_i}_{interferometer}_{mosa}_{tdi_channel}.png",
+                            plot_output=f"{anomaly_i}_{interferometer}_{mosa}_{tdi_channel}.png",
                         )
 
                 overlaps[interferometer + "_" + mosa] = np.average(tdi_overlaps)
@@ -587,47 +598,40 @@ def tdi_backtracking(
         outliers = compute_outliers(overlaps)
 
         predicted_inj_point = max(outliers, key=outliers.get)
-        expected_inj_point = expected_inj_points[glitch_i]
-        expected_inj_point = f"{expected_inj_point[8:11]}_{expected_inj_point[-2:]}"
+        expected_inj_point = expected_inj_points[anomaly_i]
+        if expected_inj_point != "gw":
+            expected_inj_point = f"{expected_inj_point[8:11]}_{expected_inj_point[-2:]}"
 
-        if predicted_inj_point == expected_inj_point:
-            identified = True
-            num_success += 1
-        else:
-            identified = False
-            print(f"{glitch_i} -- PREDICTED: {predicted_inj_point}, EXPECTED: {expected_inj_point}, LEVEL: {levels[glitch_i]}")
-
-        with open(PATH_tdi_backtracking_results + output_txt, "a") as f:
-            output = f"{glitch_i} {levels[glitch_i]} {identified} {predicted_inj_point} {expected_inj_point} "
+        with open(results_output_path, "a") as f:
+            output = f"{anomaly_i} {levels[anomaly_i]} {predicted_inj_point} {expected_inj_point} "
             for key, value in outliers.items():
                 output += f"{value} "
             f.write(output[:-1] + "\n")
 
-        print(f"{num_success}/{(max_glitch_i - min_glitch_i)} inj_points identified successfuly so far from set of {num_glitches} points")
+        print(f"Anomaly {anomaly_i - min_anomaly_i} processed from subset [{min_anomaly_i},{max_anomaly_i - 1}] from parent set of {num_anomalies} points")
 
 
 if __name__ == "__main__":
     cl_args = init_cl()
 
-    process = cl_args.process
-
     tdi_backtracking(
-        glitch_input_txt=cl_args.glitch_input_txt,
-        simulation_input_h5=cl_args.simulation_input_h5,
-        tdi_input_h5=cl_args.tdi_input_h5,
-        make_plots=True,
-        min_glitch_i=cl_args.min_glitch_i,
-        max_glitch_i=cl_args.max_glitch_i,
-        output_txt=process + "results.txt",
+        anomaly_input_fn=cl_args.anomaly_input_fn,
+        simulation_input_fn=cl_args.simulation_input_fn,
+        tdi_input_fn=cl_args.tdi_input_fn,
+        pipe_input_fn=cl_args.pipe_input_fn,
+        make_plots=False,
+        min_anomaly_i=cl_args.min_anomaly_i,
+        max_anomaly_i=cl_args.max_anomaly_i,
+        results_output_fn=cl_args.process + "results",
     )
 
     # name = "gw_test"
     # tdi_backtracking(
-    #     glitch_input_txt=name + ".txt",
+    #     anomaly_input_txt=name + ".txt",
     #     simulation_input_h5=name + ".h5",
     #     tdi_input_h5=name + ".h5",
     #     make_plots=True,
-    #     min_glitch_i=cl_args.min_glitch_i,
-    #     max_glitch_i=cl_args.max_glitch_i,
+    #     min_anomaly_i=cl_args.min_anomaly_i,
+    #     max_anomaly_i=cl_args.max_anomaly_i,
     #     output_txt=process + "results.txt",
     # )

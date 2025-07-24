@@ -1,6 +1,14 @@
 gw_0:
-  type: "GWFRED"
+  shape: "GWFRED"
   t_inj: 10000
   t_rise: 5
   t_fall: 20
   level: 1e-10
+
+gw_1:
+  shape: "GWFRED"
+  t_inj: 355600
+  t_rise: 5
+  t_fall: 20
+  level: 1e-10
+

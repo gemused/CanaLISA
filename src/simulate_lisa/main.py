@@ -1,4 +1,3 @@
-from make_glitch import make_glitch
 from inject_anomalies import inject_anomalies
 import argparse
 from make_anomalies import make_anomalies

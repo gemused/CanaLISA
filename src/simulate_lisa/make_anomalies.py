@@ -51,7 +51,16 @@ class GWFRED(ResponseFromStrain):
         return self.compute_signal(t)
 
     def compute_signal(self, t):
-        delta_t = t - self.t_inj
+        """Computes the FRED response model.
+
+        Args:
+            t (array-like): Times to compute GW model for.
+        
+        Returns:
+            Computed FRED model (array-like)
+        """
+        offset = 20
+        delta_t = t - self.t_inj + offset + (8.5 / 86400) * (self.t_inj - t0)
 
         if self.t_rise != self.t_fall:
             exp_terms = np.exp(-delta_t / self.t_rise) - np.exp(-delta_t / self.t_fall)
@@ -63,6 +72,17 @@ class GWFRED(ResponseFromStrain):
 
 
 def make_t_injs(glitch_rate, gw_rate, duration, window):
+    """Makes a list of anomaly injection times.
+
+    Args:
+        glitch_rate (int): Number of glitches per day.
+        gw_rate (int): Number of gravitational wave signals per day.
+        duration (float): Simulation duration in seconds.
+        window (float): Minimum distance between injection times in seconds.
+    
+    Returns:
+        Anomaly injection times (list)
+    """
     t_injs = []
 
     for i in range(int((glitch_rate + gw_rate) * duration / 86400)):
@@ -83,88 +103,162 @@ def make_t_injs(glitch_rate, gw_rate, duration, window):
     return t_injs
 
 
-def make_glitch(glitch_cfg, pipe_cfg, t_inj, dt, size):
-    if glitch_cfg["shape"] == "OneSidedDoubleExpGlitch":
-        t_rise_range = glitch_cfg["t_rise_range"]
-        t_fall_range = glitch_cfg["t_fall_range"]
-        level_range = glitch_cfg["level_range"]
-
-        return OneSidedDoubleExpGlitch(
-            inj_point=np.random.choice(glitch_cfg["inj_points"]),
-            t0=t0,
-            size=size,
-            dt=dt,
-            t_inj=t_inj,
-            t_rise=np.random.randint(t_rise_range[0], t_rise_range[1]),
-            t_fall=np.random.randint(t_fall_range[0], t_fall_range[1]),
-            level=np.random.uniform(float(level_range[0]), float(level_range[1])),
-        )
-    else:
-        raise AttributeError("Unsupported glitch shape")
-
-
-def make_gw(gw_cfg, pipe_cfg, orbits_input_path, t_inj, dt, size):
-    if gw_cfg["shape"] == "GWFRED":
-        t_rise_range = gw_cfg["t_rise_range"]
-        t_fall_range = gw_cfg["t_fall_range"]
-        level_range = gw_cfg["level_range"]
-        gw_beta = np.random.uniform(-np.pi/2, np.pi/2)
-        gw_lambda = np.random.uniform(-np.pi/2, np.pi/2)
-
-        return GWFRED(
-            t_rise=np.random.randint(t_rise_range[0], t_rise_range[1]),
-            t_fall=np.random.randint(t_fall_range[0], t_fall_range[1]),
-            level=np.random.uniform(float(level_range[0]), float(level_range[1])),
-            t_inj=t_inj,
-            gw_beta=gw_beta,
-            gw_lambda=gw_lambda,
-            orbits=PATH_orbits_data + orbits_input_path + ".h5",
-            dt=dt,
-            size=size,
-            t0=t0,
-        )
-    else:
-        raise AttributeError("Unsupported gravitational wave shape")
-
-
-def compute_anomalies(
-    glitch_cfg, gw_cfg, pipe_cfg, orbits_input_path, t_injs, dt, size
+def compute_anomalies_params(
+    glitch_cfg, gw_cfg, pipe_cfg, orbits_input_fn, t_injs
 ):
-    glitches = []
-    gws = []
+    """Compute dictionaries of parameters for each glitch and gravitational wave
+    signal to be injected.
+
+    Args:
+        glitch_cfg (dict): Glitch configuration dict containing glitch and
+            injection parameters.
+        gw_rate (dict): Gravitational wave configuration dict containing gw
+            and injection parameters.
+        pipe_cfg (dict): Pipeline configuration dict containing lisa instrument
+            simulation parameters.
+        orbits_input_fn (str): Orbits h5 data file name (excluding file extensions).
+        t_injs (array-like): List of anomaly injection times.
+    
+    Returns:
+        List of dictionary of glitch parameters, list of dictionary of gw parameters
+    """
+    glitches_params = []
+    gws_params = []
 
     anomaly_rate = glitch_cfg["daily_rate"] + gw_cfg["daily_rate"]
 
     for t_inj in t_injs:
         if np.random.choice((True, False), p=(glitch_cfg["daily_rate"] / anomaly_rate, gw_cfg["daily_rate"] / anomaly_rate)):
+            if glitch_cfg["shape"] == "OneSidedDoubleExpGlitch":
+                t_rise_range = glitch_cfg["t_rise_range"]
+                t_fall_range = glitch_cfg["t_fall_range"]
+                level_range = glitch_cfg["level_range"]
+
+                glitches_params.append(
+                    {
+                        "shape": "OneSidedDoubleExpGlitch",
+                        "inj_point": np.random.choice(glitch_cfg["inj_points"]),
+                        "t_rise": np.random.randint(t_rise_range[0], t_rise_range[1]),
+                        "t_fall": np.random.randint(t_fall_range[0], t_fall_range[1]),
+                        "level": np.random.uniform(float(level_range[0]), float(level_range[1])),
+                        "t_inj": t_inj,
+                    }
+                )
+            else:
+                raise AttributeError("Unsupported glitch shape")
+        else:
+            if gw_cfg["shape"] == "GWFRED":
+                t_rise_range = gw_cfg["t_rise_range"]
+                t_fall_range = gw_cfg["t_fall_range"]
+                level_range = gw_cfg["level_range"]
+
+                gws_params.append(
+                    {
+                        "shape": "GWFRED",
+                        "t_rise": np.random.randint(t_rise_range[0], t_rise_range[1]),
+                        "t_fall": np.random.randint(t_fall_range[0], t_fall_range[1]),
+                        "level": np.random.uniform(float(level_range[0]), float(level_range[1])),
+                        "t_inj": t_inj,
+                    }
+                )
+            else:
+                raise AttributeError("Unsupported gravitational wave shape")
+
+    return glitches_params, gws_params
+
+
+def compute_glitches(glitches_params, dt, size):
+    """Create glitch objects.
+
+    Args:
+        glitches_params (list<dict>): List of glitch parameter dictionaries.
+        dt (float): Sampling time steps for lisa instrument.
+        size (float): Number of output data points in lisa simulation.
+    
+    Returns:
+        List of glitch objects
+    """
+    glitches = []
+
+    for glitch_params in glitches_params:
+        if glitch_params["shape"] == "OneSidedDoubleExpGlitch":
             glitches.append(
-                make_glitch(
-                    glitch_cfg=glitch_cfg,
-                    pipe_cfg=pipe_cfg,
-                    t_inj=t_inj,
-                    dt=dt,
+                OneSidedDoubleExpGlitch(
+                    inj_point=glitch_params["inj_point"],
+                    t_inj=glitch_params["t_inj"],
+                    t_rise=glitch_params["t_rise"],
+                    t_fall=glitch_params["t_fall"],
+                    level=glitch_params["level"],
+                    t0=t0,
                     size=size,
+                    dt=dt,
                 )
             )
         else:
+            raise AttributeError("Unsupported glitch shape")
+
+    return glitches
+
+
+def compute_gws(gws_params, orbits_input_fn, dt, size):
+    """Create gravitational wave objects.
+
+    Args:
+        gws_params (list<dict>): List of gravitational wave parameter dictionaries.
+        dt (float): Sampling time steps for lisa instrument.
+        size (float): Number of output data points in lisa simulation.
+    
+    Returns:
+        List of gravitational wave objects
+    """
+    gws = []
+
+    for gw_params in gws_params:
+        if gw_params["shape"] == "GWFRED":
+            gw_beta = 0#np.random.uniform(-np.pi/2, np.pi/2)
+            gw_lambda = np.pi/7#np.random.uniform(-np.pi/2, np.pi/2)
+
             gws.append(
-                make_gw(
-                    gw_cfg=gw_cfg,
-                    pipe_cfg=pipe_cfg,
-                    orbits_input_path=orbits_input_path,
-                    t_inj=t_inj,
+                GWFRED(
+                    t_inj=gw_params["t_inj"],
+                    t_rise=gw_params["t_rise"],
+                    t_fall=gw_params["t_fall"],
+                    level=gw_params["level"],
+                    gw_beta=gw_beta,
+                    gw_lambda=gw_lambda,
+                    orbits=PATH_orbits_data + orbits_input_fn + ".h5",
                     dt=dt,
                     size=size,
+                    t0=t0,
                 )
             )
+        else:
+            raise AttributeError("Unsupported gravitational wave shape")
 
-    return glitches, gws
+    return gws
 
 
 def write(
     glitches, gws, glitch_output_path, gws_output_path, pipe_output_path,
     anomaly_output_path, t0, dt, size
 ):
+    """Write anomalies to respective h5 files and their relevant information
+    txt files.
+
+    Args:
+        glitches (list): List of lisaglitch glitch objects.
+        gws (list<dict>): List of gwresponse gravitational wave objects.
+        glitch_output_path (str): Path to write glitch data and info to (excluding file extension).
+        gws_output_path (str): Path to write gravitational wave data and info to (excluding file extension).
+        pipe_output_path (str): Path to write LISA pipeline info to (excluding file extension).
+        anomaly_output_path (str): Path to write anomaly info to (excluding file extension).
+        t0 (float): Initial time of simulation.
+        dt (float): Sampling time steps for lisa instrument.
+        size (float): Number of output data points in lisa simulation.
+    
+    Returns:
+        None
+    """
     glitch_output_path_h5 = glitch_output_path + ".h5"
     glitch_output_path_txt = glitch_output_path + ".txt"
 
@@ -218,6 +312,22 @@ def make_anomalies(
     glitch_cfg_input_fn, gw_cfg_input_fn, pipe_cfg_input_fn, orbits_input_fn,
     glitch_output_fn, gw_output_fn, pipe_output_fn, anomaly_output_fn
 ):
+    """Creates glitch and gravitational wave objects given config files and
+    writes data to their respective files.
+
+    Args:
+        glitch_cfg_input_fn (str): Glitch config file name (excluding file extension).
+        gw_cfg_input_fn (str): Gravitational wave config file name (excluding file extension).
+        pipe_cfg_input_fn (str): Pipeline config file name (excluding file extension).
+        orbits_input_fn (str): Orbits h5 data file name (excluding file extensions).
+        glitch_output_fn (str): Glitch h5/txt data output file name (excluding file extensions).
+        gw_output_fn (str): GW h5/txt data output file name (excluding file extensions).
+        pipe_output_fn (str): Pipeline txt data output file name (excluding file extensions).
+        anomaly_output_fn (str): Anomaly txt data output file name (excluding file extensions). 
+    
+    Returns:
+        None
+    """
     glitch_cfg = ymlio.load_config(PATH_glitch_config + glitch_cfg_input_fn + ".yml")
     gw_cfg = ymlio.load_config(PATH_gw_config + gw_cfg_input_fn + ".yml")
     pipe_cfg = ymlio.load_config(PATH_pipe_config + pipe_cfg_input_fn + ".yml")
@@ -226,13 +336,14 @@ def make_anomalies(
     size = pipe_cfg["duration"].to("s").value / dt
 
     if "glitch_0" in glitch_cfg and "gw_0" in gw_cfg:
-        glitches = [value for key, value in glitch_cfg.items()]
-        gws = [value for key, value in gw_cfg.items()]
+        glitches_params = [value for key, value in glitch_cfg.items()]
+        gws_params = [value for key, value in gw_cfg.items()]
 
-        for glitch in glitches:
-            glitch["t_inj"] += t0
-        for gw in gws:
-            gw["t_inj"] += t0
+        for glitch_params in glitches_params:
+            glitch_params["t_inj"] += t0
+
+        for gw_params in gws_params:
+            gw_params["t_inj"] += t0
     elif "glitch_0" not in glitch_cfg and "gw_0" not in gw_cfg:
         t_injs = make_t_injs(
             glitch_rate=glitch_cfg["daily_rate"],
@@ -241,17 +352,28 @@ def make_anomalies(
             window=500,
         )
 
-        glitches, gws = compute_anomalies(
+        glitches_params, gws_params = compute_anomalies_params(
             glitch_cfg=glitch_cfg,
             gw_cfg=gw_cfg,
             pipe_cfg=pipe_cfg,
-            orbits_input_path=orbits_input_fn,
+            orbits_input_fn=orbits_input_fn,
             t_injs=t_injs,
-            dt=dt,
-            size=size,
         )
     else:
         raise AttributeError("Mix-and-matching single and large-scale gw and glitch injections unsupported")
+
+    glitches = compute_glitches(
+        glitches_params=glitches_params,
+        dt=dt,
+        size=size,
+    )
+
+    gws = compute_gws(
+        gws_params=gws_params,
+        orbits_input_fn=orbits_input_fn,
+        dt=dt,
+        size=size,
+    )
 
     write(
         glitches=glitches,

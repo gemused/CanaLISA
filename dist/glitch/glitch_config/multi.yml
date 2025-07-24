@@ -18,7 +18,7 @@ inj_points:
   - "readout_rfi_carrier_13"
   - "readout_rfi_carrier_32"
   - "readout_rfi_carrier_21"
-daily_rate: 10
+daily_rate: 50
 t_rise_range: [5, 20]
 t_fall_range: [5, 20]
 level_range: [1.2e2, 5e3]
