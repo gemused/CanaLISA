@@ -22,30 +22,24 @@ The only parameters that you must specify for the simulation to run are those in
 
 Simulation data outputs can be found in `~/dist/lisa_data/simulation_data/`. Interferometer data can be read using the following code template:
 ~~~python
-...
 with h5py.File(<file_path>, "r") as sim_file:
     interferometer_data = sim_file[<interferometer_type> + "_carrier_fluctuations"][<mosa>],
-...
 ~~~
 Other simulation data can be accessed using a similar method and can be intuited by the user.
 
 Conversly, TDI data ouptuts can be found in `~/dist/lisa_data/tdi_data/` and read in code using a similar code template:
 ~~~python 
-...
 with h5py.File(<file_path>, "r") as tdi_file:
     tdi_data = tdi_file[<tdi_channel>]
-...
 ~~~
 
 ### Anomaly and Pipeline Information (.txt files)
 
 To open anomlay and pipeline information (or really any .txt file for that matter), we use `numpy.genfromtxt`. The general template for accessing txt data outputted by `WilliamLISA` using this function is given below:
 ~~~python 
-...
 txt_data = np.genfromtxt(<txt_data_path>, dtype=<data_type>)
 
 data = txt_data[<num_skipped_rows>:, <column_index>]
-...
 ~~~
 For further clarification, here is a code block that uses this template to extract data from an anomaly information file as a list of anomalies (where each anomaly is a dictionary with its respective information):
 ~~~python 
@@ -86,15 +80,13 @@ duration: <float> s
 
 ### Individually Specified Glitch and Gravitational Waves
 There are two types of configuration files for specifying the parameters of anomalies. This section is dedicated to the type where you can specify each anomaly's parameters individually. To do so, begin by creating .yml files in both `~/dist/glitch/glitch_config/` and `~/dist/gw/gw_config/`. To specify an anomaly, the following template for each anomaly is used in the configuration file of your choice:
-~~~yml 
-...
+~~~yml
 <glitch | gw>_<index>:
     inj_point: <str>
     t_inj: <float>
     ...
     <parameter_i>: <value>
     ...
-...
 ~~~
 Note that \<index> must start from 0. 
 
@@ -207,13 +199,17 @@ The code is setup in such a way that it should be fairly ok to add new glitch sh
     ~~~
 4. In `write` add the following elif statement for writing specific glitch information to the glitch txt data:
     ~~~python
-        elif isinstance(glitch, StepGlitch):
-            f.write(f"StepGlitch {glitch.t_inj} {glitch.level} {anomaly.duration}\n")
+    ...
+    elif isinstance(glitch, StepGlitch):
+        f.write(f"StepGlitch {glitch.t_inj} {glitch.level} {anomaly.duration}\n")
+    ...
     ~~~
     Also add the following elif statement for writing specific glitch information to the anomnaly txt data:
     ~~~python
-        elif isinstance(anomaly, StepGlitch):
-            f.write(f"StepGlitch {anomaly.inj_point} {anomaly.t_inj} {anomaly.level} {anomaly.duration}\n")
+    ...
+    elif isinstance(anomaly, StepGlitch):
+        f.write(f"StepGlitch {anomaly.inj_point} {anomaly.t_inj} {anomaly.level} {anomaly.duration}\n")
+    ...
     ~~~
 Now as long as you follow the correct formatting for the configuration files as described in *Configuration File Structures*, you should be all good to go!
 
@@ -321,12 +317,16 @@ Again, the code is setup in such a way that it should be fairly ok to add new gr
     ~~~
 5. In `write` add the following elif statement for writing specific gravitational wave information to the gravitational wave txt data:
     ~~~python
+    ...
     elif isinstance(gw, GWFRED):
         f.write(f"GWFRED {gw.t_inj} {gw.amp} {gw.t_rise} {gw.t_fall} {gw.duration}\n")
+    ...
     ~~~
     Also add the following elif statement for writing specific gravitational wave information to the anomnaly txt data:
     ~~~python
+    ...
     elif isinstance(anomaly, GWFRED):
         f.write(f"GWBurst gw {anomaly.t_inj} {gw.amp} {gw.duration}\n")
+    ...
     ~~~
 If you repeat and adapt the above procedure for your given gravitational wave shape you should be able to start adding them to your simulations!
