@@ -281,10 +281,10 @@ def compute_gws(gws_params, orbits_input_fn, dt, size):
     gws = []
 
     for gw_params in gws_params:
-        if gw_params["shape"] == "GWFRED":
-            gw_beta = 0#np.random.uniform(-np.pi/2, np.pi/2)
-            gw_lambda = np.pi/7#np.random.uniform(-np.pi/2, np.pi/2)
+        gw_beta = 0#np.random.uniform(-np.pi/2, np.pi/2)
+        gw_lambda = np.pi/7#np.random.uniform(-np.pi/2, np.pi/2)
 
+        if gw_params["shape"] == "GWFRED":
             gws.append(
                 GWFRED(
                     t_inj=gw_params["t_inj"],

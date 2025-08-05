@@ -215,3 +215,118 @@ The code is setup in such a way that it should be fairly ok to add new glitch sh
         elif isinstance(anomaly, StepGlitch):
             f.write(f"StepGlitch {anomaly.inj_point} {anomaly.t_inj} {anomaly.level} {anomaly.duration}\n")
     ~~~
+Now as long as you follow the correct formatting for the configuration files as described in *Configuration File Structures*, you should be all good to go!
+
+## Adding Gravitational Wave Shapes
+
+Again, the code is setup in such a way that it should be fairly ok to add new gravitational wave shape support. This is done primarily through `lisagwresponse`. To do so will be almost identical to that for adding new glitch shapes, except instead of simply importing a class for the shape, we'll have to make our own. As an example, we'll add the FRED (Fast Rising Exponential Decay) gravitational wave shape. All the following work will be done in `~/src/simulate_lisa/make_anomalies.py`.
+
+1. Create a new class for the gravitational wave shape by subclassing off of the abstract class `lisagwresponse.ResponseFromStrain`:
+    ~~~python
+    class GWFRED(ResponseFromStrain):
+    """Represents a one-sided double-exponential gw signal
+
+    Args:
+        t_rise: Rising timescale
+        t_fall: Falling timescale
+        level: amplitude
+    """
+    def __init__(
+        self,
+        t_rise: float,
+        t_fall: float,
+        level: float,
+        t_inj: float,
+        **kwargs,
+    ) -> None:
+        super().__init__(**kwargs)
+
+        self.t_rise = float(t_rise)
+        self.t_fall = float(t_fall)
+        self.level = float(level)
+        self.t_inj = float(t_inj)
+
+    def compute_hcross(self, t):
+        # stub
+
+    def compute_hplus(self, t):
+        # stub
+    ~~~
+
+2. Implement the two methods `compute_hcross` and `compute_hplus` to apply the FRED mathematical shape and return the array `t` with FRED applied (only `compute_hcross` implementation is shown below):
+    ~~~python
+    ...
+    def compute_hcross(self, t):
+        """Computes the FRED response model.
+
+        Args:
+            t (array-like): Times to compute GW strain for.
+
+        Returns:
+            Computed FRED model (array-like)
+        """
+        offset = 20
+        delta_t = t - self.t_inj + offset + (8.5 / 86400) * (self.t_inj - t0)
+
+        if self.t_rise != self.t_fall:
+            exp_terms = np.exp(-delta_t / self.t_rise) - np.exp(-delta_t / self.t_fall)
+            signal = self.level * exp_terms / (self.t_rise - self.t_fall)
+        else:
+            signal = self.level * delta_t * np.exp(-delta_t / self.t_fall) / self.t_fall**2
+
+        return np.where(delta_t >= 0, signal, 0)
+    ...
+    ~~~
+3. In `compute_anomalies_params` in the if-statement block that is called when a gravitational wave is chosen to be made at random, add a new elif statement that appends a dictionary with all of the gravitational wave's params to `gws_params`:
+    ~~~python
+    ...
+    elif gw_cfg["shape"] == "GWFRED":
+        t_fall_range = gw_cfg["t_fall_range"]
+        amp_range = gw_cfg["amp_range"]
+
+        amp = np.random.uniform(float(amp_range[0]), float(amp_range[1]))
+        t_fall = np.random.randint(t_fall_range[0], t_fall_range[1])
+        level = amp * t_fall
+
+        gws_params.append(
+            {
+                "shape": "GWFRED",
+                "t_rise": t_fall,
+                "t_fall": t_fall,
+                "level": level,
+                "t_inj": t_inj,
+            }
+        )
+    ...
+    ~~~
+4. In `compute_gws`, add a new elif statement that creates the glitch object and appends it to `glitches`:
+    ~~~python
+    ...
+    elif gw_params["shape"] == "GWFRED":
+        gws.append(
+            GWFRED(
+                t_inj=gw_params["t_inj"],
+                t_rise=gw_params["t_fall"],
+                t_fall=gw_params["t_fall"],
+                level=gw_params["level"],
+                gw_beta=gw_beta,
+                gw_lambda=gw_lambda,
+                orbits=PATH_orbits_data + orbits_input_fn + ".h5",
+                dt=dt,
+                size=size,
+                t0=t0,
+            )
+        )
+    ...
+    ~~~
+5. In `write` add the following elif statement for writing specific gravitational wave information to the gravitational wave txt data:
+    ~~~python
+    elif isinstance(gw, GWFRED):
+        f.write(f"GWFRED {gw.t_inj} {gw.amp} {gw.t_rise} {gw.t_fall} {gw.duration}\n")
+    ~~~
+    Also add the following elif statement for writing specific gravitational wave information to the anomnaly txt data:
+    ~~~python
+    elif isinstance(anomaly, GWFRED):
+        f.write(f"GWBurst gw {anomaly.t_inj} {gw.amp} {gw.duration}\n")
+    ~~~
+If you repeat and adapt the above procedure for your given gravitational wave shape you should be able to start adding them to your simulations!
