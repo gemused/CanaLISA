@@ -1,3 +1,11 @@
+"""
+Filename: tdi_backtracking.py
+Author: William Mostrenko
+Created: 2025-07-16
+Description: Apply tdi-backtracking to set of data with list of anomaly
+    information.
+"""
+
 import numpy as np
 import os
 import h5py
@@ -7,31 +15,39 @@ from pycbc.types.timeseries import TimeSeries
 from pycbc.types.timeseries import FrequencySeries
 from scipy.signal import welch
 from pycbc.filter import matchedfilter
-from performance_analysis import plot_overlap, plot_level_performance
+from performance_analysis import plot
+from scipy.ndimage import gaussian_filter1d
+from scipy.interpolate import InterpolatedUnivariateSpline
 
 PATH_src = os.path.abspath(os.path.join(os.getcwd(), os.pardir))
 PATH_bethLISA = os.path.abspath(os.path.join(PATH_src, os.pardir))
-PATH_simulation_data = os.path.join(PATH_bethLISA, "dist/lisa_data/simulation_data/")
 PATH_tdi_data = os.path.join(PATH_bethLISA, "dist/lisa_data/tdi_data/")
+PATH_pipe_data = os.path.join(PATH_bethLISA, "dist/pipe/pipe_data/")
+PATH_simulation_data = os.path.join(PATH_bethLISA,
+                                    "dist/lisa_data/simulation_data/")
 PATH_tdi_backtracking_plots = os.path.join(PATH_bethLISA,
                                            "dist/tdi_backtracking/plots/")
 PATH_tdi_backtracking_results = os.path.join(PATH_bethLISA,
                                              "dist/tdi_backtracking/results/")
-PATH_anomaly_data = os.path.join(PATH_bethLISA, "dist/tdi_backtracking/anomaly_data/")
-PATH_pipe_data = os.path.join(PATH_bethLISA, "dist/pipe/pipe_data/")
-FREQUENCY_BAND_COEFF = 0.75
+PATH_anomaly_data = os.path.join(PATH_bethLISA,
+                                 "dist/tdi_backtracking/anomaly_data/")
+LOW_PASS_CUTOFF = 1.25
+INTERP_FACTOR = 5
 INTERFEROMETERS = ["isi", "tmi", "rfi"]
 MOSAS = ["12", "23", "31", "13", "32", "21"]
 ETA_TDI = {
-    "12": ("X", "Y"), "23": ("Y", "Z"), "31": ("X", "Z"),
-    "13": ("X", "Z"), "32": ("Y", "Z"), "21": ("X", "Y")
+    "12": ("X", "Y"),
+    "23": ("Y", "Z"),
+    "31": ("X", "Z"),
+    "13": ("X", "Z"),
+    "32": ("Y", "Z"),
+    "21": ("X", "Y"),
 }
-RFI_OPPOSITES = {
-    "12": "13", "23": "21", "31": "32", "13": "12", "21": "23", "32": "31"
-}
+RFI_OPPOSITES = {"12": "13", "23": "21", "31": "32", "13": "12", "21": "23", "32": "31"}
 TDI_ETA = {
-    "X": ["12", "21", "13", "31"], "Y": ["23", "32", "12", "21"],
-    "Z": ["31", "13", "23", "32"]
+    "X": ["12", "21", "13", "31"],
+    "Y": ["23", "32", "12", "21"],
+    "Z": ["31", "13", "23", "32"],
 }
 RFI_COMBINATION_MID = ["X12", "Y23", "Z31"]
 X_12 = [
@@ -109,6 +125,11 @@ Z_32 = [
 
 
 def init_cl():
+    """Initialize commandline arguments.
+
+    Returns:
+    Commandline arguments (namespace)
+    """
     parser = argparse.ArgumentParser()
 
     # FILE MANAGEMENT
@@ -161,50 +182,110 @@ def init_cl():
     return parser.parse_args()
 
 
-def init_pipe_info(pipe_input_fn, anomaly_input_fn):
-    anomaly_info = np.genfromtxt(PATH_anomaly_data + anomaly_input_fn + ".txt")
-    pipe_info = np.genfromtxt(PATH_pipe_data + pipe_input_fn + ".txt")
+def interpolate_data(data, t_range, dt, interp_dt, t0):
+    """Interpolate time series data using a univariate spline.
 
-    t0 = anomaly_info[1:, 5][0]
-    dt = anomaly_info[1:, 3][0]
+    Args:
+        data (array-like): Data to be interpolated.
+        t_range (tuple<int, int>): Time range to sample data.
+        dt (float): Sampling time steps for LISA instrument.
+        interp_dt (float): Sampling time steps for data post-interpolation.
+        t0 (float): Initial time of simulation.
 
-    return dt, t0
-
-
-def init_simulation_data(simulation_input_fn, interferometer, mosa, t_range, dt, t0):
+    Returns:
+        interpoalted data (TimeSeries)
+    """
     i_range = (int(t_range[0] / dt), int(t_range[1] / dt))
+    cut_data = data[i_range[0]:i_range[1]]
+    size = len(cut_data)
+    times = np.linspace(t_range[0], t_range[1], size)
+    interp_times = np.linspace(t_range[0], t_range[1], int(size * INTERP_FACTOR))
+
+    return TimeSeries(
+        InterpolatedUnivariateSpline(
+            x=times,
+            y=cut_data,
+        )(interp_times),
+        delta_t=interp_dt,
+        epoch=t0 + t_range[0],
+    )
+
+
+def init_simulation_data(simulation_input_fn, interferometer, mosa, t_range, dt, interp_dt, t0):
+    """Initialize LISA interferometer and delay data.
+
+    Args:
+        simulation_input_fn (str): Pipeline txt data file name (excluding file
+            extensions).
+        interferometer (str): One of ["isi", "tmi", "rfi"].
+        mosa (str): One of ["12", "23", "31", "13", "32", "21"].
+        t_range (tuple<int, int>): Time range to sample data for backtracking.
+        dt (float): Sampling time steps for LISA instrument.
+        interp_dt (float): Sampling time steps for data post-interpolation.
+        t0 (float): Initial time of simulation.
+
+    Returns:
+        interferometer simulation data (TimeSeries), delay simulation data
+            (TimeSeries)
+    """
     delay_data = {}
 
-    with h5py.File(PATH_simulation_data + simulation_input_fn + ".h5", "r") as sim_file:
-        sim_data = TimeSeries(
-            sim_file[interferometer + "_carrier_fluctuations"][mosa][i_range[0]:i_range[1]],
-            delta_t=dt,
-            epoch=t0,
+    with h5py.File(PATH_simulation_data + simulation_input_fn + ".h5", "r") \
+            as sim_file:
+        sim_data = interpolate_data(
+            data=sim_file[interferometer + "_carrier_fluctuations"][mosa],
+            t_range=t_range,
+            dt=dt,
+            interp_dt=interp_dt,
+            t0=t0,
         )
         for mosa in MOSAS:
-            delay_data[mosa] = TimeSeries(
-                sim_file["mprs"][mosa][i_range[0]:i_range[1]],
-                delta_t=dt,
-                epoch=t0,
+            delay_data[mosa] = interpolate_data(
+                data=sim_file["mprs"][mosa],
+                t_range=t_range,
+                dt=dt,
+                interp_dt=interp_dt,
+                t0=t0,
             )
 
     return sim_data, delay_data
 
 
-def init_tdi_data(tdi_input_fn, tdi_channel, t_range, dt, t0):
-    i_range = (int(t_range[0] / dt), int(t_range[1] / dt))
+def init_tdi_data(tdi_input_fn, tdi_channel, t_range, dt, interp_dt, t0):
+    """Initialize TDI data from specified tdi_channel.
 
+    Args:
+        tdi_input_fn (str): TDI h5 data file name (excluding file extensions).
+        tdi_channel (str): One of ["X", "Y", "Z"].
+        t_range (tuple<int, int>): Time range to sample data for backtracking.
+        dt (float): Sampling time steps for LISA instrument.
+        interp_dt (float): Sampling time steps for data post-interpolation.
+        t0 (float): Initial time of simulation.
+
+    Returns:
+        TDI data from specified tdi_channel (TimeSeries)
+    """
     with h5py.File(PATH_tdi_data + tdi_input_fn + ".h5", "r") as tdi_file:
-        tdi_data = TimeSeries(
-            tdi_file[tdi_channel][i_range[0]:i_range[1]],
-            delta_t=dt,
-            epoch=t0,
+        tdi_data = interpolate_data(
+            data=tdi_file[tdi_channel],
+            t_range=t_range,
+            dt=dt,
+            interp_dt=interp_dt,
+            t0=t0,
         )
 
     return tdi_data
 
 
 def copy_equation(equation):
+    """Copy given equation (not reference to equation).
+
+    Args:
+        equation (list<dict>): List of terms (dict) in equation (list).
+
+    Returns:
+        Copy of given equation (list<dict>)
+    """
     equation_copy = []
     for term in equation:
         term_copy = {}
@@ -215,6 +296,14 @@ def copy_equation(equation):
 
 
 def apply_coeff(coeff, equation):
+    """Apply a scalar given equation.
+
+    Args:
+        equation (list<dict>): List of terms (dict) in equation (list).
+
+    Returns:
+        Equation with scalar applied (list<dict>)
+    """
     equation_copy = copy_equation(equation)
     for term in equation_copy:
         term["coeff"] *= coeff
@@ -222,6 +311,14 @@ def apply_coeff(coeff, equation):
 
 
 def apply_delay_mosa(delay_mosa, equation):
+    """Apply a mosa delay to given equation.
+
+    Args:
+        equation (list<dict>): List of terms (dict) in equation (list).
+
+    Returns:
+        Equation with mosa delay applied (list<dict>)
+    """
     equation_copy = copy_equation(equation)
     for term in equation_copy:
         term["delay_mosa"].insert(0, delay_mosa)
@@ -229,40 +326,68 @@ def apply_delay_mosa(delay_mosa, equation):
 
 
 def data_to_equation(equation, delay_data, t_range):
+    """Create delays and sum like-terms in an equation.
+
+    Args:
+        equation (list<dict>): List of terms (dict) in equation (list).
+        delay_data (TimeSeries): Delay data for simulated LISA.
+        t_range (tuple<int, int>): Time range to sample data for backtracking.
+
+    Returns:
+        Coefficients for each term in equation to backtrack (list<int>),
+        delays for each term in equation to backtrack (list<int>)
+    """
     # SUM DELAYS
     for term in equation:
         term["delay"] = 0
         for mosa in term["delay_mosa"]:
             term["delay"] += mean(delay_data[mosa][:])
-        term["delay"] = int(term["delay"])
+        # term["delay"] = int(term["delay"])
 
     equation.sort(key=lambda term: term["delay"])
 
     # SUM LIKE-TERMS
     i = 0
     while i < len(equation) - 1:
-        if equation[i]["delay"] == equation[i + 1]["delay"]:
+        if abs(equation[i]["delay"] - equation[i + 1]["delay"]) < 0.25:
             equation[i]["coeff"] += equation[i + 1]["coeff"]
+            equation[i]["delay"] = (equation[i]["delay"] + equation[i + 1]["delay"]) / 2
             equation.remove(equation[i + 1])
         i += 1
 
     coeff = [term["coeff"] for term in equation]
     delays = [term["delay"] for term in equation]
-    delays.append(t_range[1] - t_range[0])
+
+    # duration = t_range[1] - t_range[0]
+
 
     return delays, coeff
 
 
 def piece_by_piece_backtrack(tdi_data, delays, coeff):
+    """Create a model for interferometer data from TDI data.
+
+    Args:
+        tdi_data (TimeSeries): TDI data to sample from.
+        delays (list<int>): Delays for each term in equation to backtrack.
+        coeff (list<int>): Coefficients for each term in equation to backtrack.
+
+    Returns:
+        Model for interferometer data (TimeSeries)
+    """
     i_delays = [int(delay / tdi_data.delta_t) for delay in delays]
 
     model_vals = [0 for i in range(i_delays[-1])]
 
     for i_delay in range(0, len(i_delays) - 1):
         for i in range(i_delays[i_delay], i_delays[i_delay + 1]):
-            model_vals[i - i_delays[0]] = tdi_data[i]/coeff[0]
+            model_vals[i - i_delays[0]] = tdi_data[i] / coeff[0]
             for j in range(1, i_delay + 1):
-                model_vals[i - i_delays[0]] -= coeff[j]*model_vals[i-i_delays[j]]/coeff[0]
+                model_vals[i - i_delays[0]] -= (
+                    coeff[j] * model_vals[i - i_delays[j]] / coeff[0]
+                )
+
+    # model_vals = gaussian_filter1d(model_vals, sigma=10)
 
     model = TimeSeries(
         model_vals,
@@ -274,6 +399,17 @@ def piece_by_piece_backtrack(tdi_data, delays, coeff):
 
 
 def make_equation(interferometer, mosa, tdi_channel):
+    """Determine an equation for the effect on tdi_channel given the
+        interferometer and mosa.
+
+    Args:
+        interferometer (str): One of ["isi", "tmi", "rfi"].
+        mosa (str): One of ["12", "23", "31", "13", "32", "21"].
+        tdi_channel (str): One of ["X", "Y", "Z"].
+
+    Returns:
+        Equation representing effect on tdi_channel (list<dict>)
+    """
     mosa_ij = mosa
     mosa_ji = mosa_ij[::-1]
     mosa_ij_op = RFI_OPPOSITES[mosa_ij]
@@ -285,7 +421,7 @@ def make_equation(interferometer, mosa, tdi_channel):
     if interferometer.lower() == "isi":
         return A_ij
     elif interferometer.lower() == "tmi":
-        return apply_coeff(-1/2, A_ij + apply_delay_mosa(mosa_ij, A_ji))
+        return apply_coeff(-1 / 2, A_ij + apply_delay_mosa(mosa_ij, A_ji))
     elif interferometer.lower() == "rfi" and mosa_ij in ["13", "21", "32"]:
         return apply_delay_mosa(mosa_ji, A_ji)
     else:
@@ -295,14 +431,28 @@ def make_equation(interferometer, mosa, tdi_channel):
             ji = apply_delay_mosa(mosa_ji, A_ji)
             ji_op = apply_coeff(-1, apply_delay_mosa(mosa_ji_op, A_ji_op))
 
-            return apply_coeff(1/2, ji + ji_op)
+            return apply_coeff(1 / 2, ji + ji_op)
         else:
-            return apply_coeff(1/2, A_ij + apply_delay_mosa(mosa_ji, A_ji))
+            return apply_coeff(1 / 2, A_ij + apply_delay_mosa(mosa_ji, A_ji))
 
 
 def compute_model(
     tdi_data, tdi_channel, interferometer, mosa, delay_data, t_range
 ):
+    """Compute a model for what interferometer data should look like assuming
+        it was the primary component of data from a tdi_channel.
+
+    Args:
+        tdi_data (TimeSeries): TDI data to sample from.
+        tdi_channel (str): One of ["X", "Y", "Z"].
+        interferometer (str): One of ["isi", "tmi", "rfi"].
+        mosa (str): One of ["12", "23", "31", "13", "32", "21"].
+        delay_data (TimeSeries): Delay data for simulated LISA.
+        t_range (tuple<int, int>): Time range to sample data for backtracking.
+
+    Returns:
+        Equation representing effect on tdi_channel (list<dict>)
+    """
     equation = make_equation(interferometer, mosa, tdi_channel)
 
     delays, coeff = data_to_equation(
@@ -311,25 +461,16 @@ def compute_model(
         t_range=t_range,
     )
 
+    duration = len(tdi_data) * tdi_data.delta_t
+    for delay in reversed(delays):
+        if delay >= duration:
+            delays.remove(delay)
+    delays.append(len(tdi_data) * tdi_data.delta_t)
+
     model = piece_by_piece_backtrack(
         tdi_data=tdi_data,
         delays=delays,
         coeff=coeff,
-    )
-
-    return model
-
-
-def compute_single_model(
-    tdi_data, tdi_channel, interferometer, mosa, delay_data, t_range
-):
-    model = compute_model(
-        tdi_data=tdi_data,
-        tdi_channel=tdi_channel,
-        interferometer=interferometer,
-        mosa=mosa,
-        delay_data=delay_data,
-        t_range=t_range,
     )
 
     return TimeSeries(
@@ -338,132 +479,170 @@ def compute_single_model(
         epoch=model.start_time,
     )
 
-    return model
 
+def compute_averaged_psd(data_segs, dt):
+    """Compute a psd averaged from num_r noise realizations.
 
-def compute_averaged_model(
-    tdi_data_A, tdi_data_B, tdi_channel_A, tdi_channel_B, interferometer, mosa,
-    delay_data, t_range
-):
-    model_A = compute_model(
-        tdi_data=tdi_data_A,
-        tdi_channel=tdi_channel_A,
-        interferometer=interferometer,
-        mosa=mosa,
-        delay_data=delay_data,
-        t_range=t_range,
-    )
+    Args:
+        data_segs (list<TimeSeries>): List of noise realizations.
+        dt (float): Sampling time steps for LISA instrument.
 
-    model_B = compute_model(
-        tdi_data=tdi_data_B,
-        tdi_channel=tdi_channel_B,
-        interferometer=interferometer,
-        mosa=mosa,
-        delay_data=delay_data,
-        t_range=t_range,
-    )
-
-    return TimeSeries(
-        [(model_A[i] + model_B[i]) / 2 for i in range(len(model_A))],
-        delta_t=model_A.delta_t,
-        epoch=model_A.start_time,
-    )
-
-
-def compute_averaged_psd(data_segs, num_r, duration, dt):
+    Returns:
+        psd (FrequencySeries)
+    """
     psd = []
 
-    max_delta_f = 0.00125
-    nperseg = int(1/(dt * max_delta_f))
-
-    for seg in data_segs:
-        seg = seg[:int(duration / dt)]
-        seg_f, seg_psd = welch(seg, fs=int(1 / dt), nperseg=nperseg)
+    for i in range(len(data_segs)):
+        seg = data_segs[i]
+        seg_f, seg_psd = welch(seg, fs=int(1 / dt), nperseg=int(len(seg)))
 
         if not psd:
             psd = [0 for i in range(len(seg_f))]
         psd = map(lambda x, y: x + y, psd, seg_psd)
 
-    psd = map(lambda x: x / num_r, list(psd))
+    psd = map(lambda x: x / len(data_segs), list(psd))
     delta_f = seg_f[1] - seg_f[0]
 
     return FrequencySeries(list(psd), delta_f=delta_f)
 
 
 def seg_data(data, num_r, duration, dt):
-    seg_len = int(len(data)/num_r)
+    """Segment data into smaller array-likes.
+
+    Args:
+        data (array-like): Data to segment.
+        num_r (int): Number of segments.
+        duration (float): Anomaly duration in s.
+        dt (float): Sampling time steps for LISA instrument.
+
+    Returns:
+        List of data segements list<array-like>
+    """
+    seg_len = int(len(data) / num_r)
     data_segs = []
 
     for i in range(num_r):
         i_min = i * seg_len
-        i_max = i_min + int(duration/dt)
+        i_max = i_min + int(duration / dt)
 
         data_segs.append(data[i_min:i_max])
 
     return data_segs
 
 
-def compute_interferometer_psd(interferometer, mosa, num_r, duration, dt, t0):
-    with h5py.File(PATH_simulation_data + "psd_sample_simulation.h5", "r") as sim_file:
-        sim_data = TimeSeries(
-            sim_file[interferometer + "_carrier_fluctuations"][mosa],
-            delta_t=dt,
-            epoch=t0,
+def compute_interferometer_psd(interferometer, mosa, num_r, duration, dt, interp_dt, t0):
+    """Compute a psd averaged over num_r noise realizations for interferometer
+        data.
+
+    Args:
+        interferometer (str): One of ["isi", "tmi", "rfi"].
+        mosa (str): One of ["12", "23", "31", "13", "32", "21"].
+        num_r (int): Number of segments.
+        duration (float): Anomaly duration in s.
+        dt (float): Sampling time steps for LISA instrument.
+        interp_dt (float): Sampling time steps for data post-interpolation.
+        t0 (float): Initial time of simulation.
+
+    Returns:
+        psd (FrequencySeries)
+    """
+    with h5py.File(PATH_simulation_data + "psd_sample_simulation.h5", "r") \
+            as sim_file:
+        sim_array = sim_file[interferometer + "_carrier_fluctuations"][mosa]
+
+        sim_data = interpolate_data(
+            data=sim_array,
+            t_range=(0, int(len(sim_array) * dt)),
+            dt=dt,
+            interp_dt=interp_dt,
+            t0=t0,
         )
 
-    data_segs = seg_data(sim_data, num_r, duration, dt)
+    data_segs = seg_data(
+        data=sim_data,
+        num_r=num_r,
+        duration=duration,
+        dt=interp_dt,
+    )
 
     interferometer_psd = compute_averaged_psd(
         data_segs=data_segs,
-        num_r=num_r,
-        duration=duration,
-        dt=dt,
+        dt=interp_dt,
     )
 
     return interferometer_psd
 
 
 def compute_model_psd(
-    interferometer, mosa, tdi_channel, delay_data, num_r, duration, dt, t0
+    interferometer, mosa, tdi_channel, delay_data, num_r, duration, dt, interp_dt, t0
 ):
+    """Compute a psd averaged over num_r noise realizations for
+        post-reconstrcution TDI data.
+
+    Args:
+        interferometer (str): One of ["isi", "tmi", "rfi"].
+        mosa (str): One of ["12", "23", "31", "13", "32", "21"].
+        tdi_channel (str): One of ["X", "Y", "Z"].
+        delay_data (TimeSeries): Delay data for simulated LISA.
+        num_r (int): Number of segments.
+        duration (float): Anomaly duration in s.
+        dt (float): Sampling time steps for LISA instrument.
+        interp_dt (float): Sampling time steps for data post-interpolation.
+        t0 (float): Initial time of simulation.
+
+    Returns:
+        psd (FrequencySeries)
+    """
     with h5py.File(PATH_tdi_data + "psd_sample_tdi.h5", "r") as tdi_file:
-        tdi_data = TimeSeries(
-            tdi_file[tdi_channel],
-            delta_t=dt,
-            epoch=t0,
+        tdi_array = tdi_file[tdi_channel]
+
+        tdi_data = interpolate_data(
+            data=tdi_array,
+            t_range=(0, int(len(tdi_array) * dt)),
+            dt=dt,
+            interp_dt=interp_dt,
+            t0=t0,
         )
 
     data_segs = seg_data(
         data=tdi_data,
         num_r=num_r,
-        duration=duration, #EDIT
-        dt=dt,
+        duration=duration,
+        dt=interp_dt,
     )
 
     recon_data_segs = []
-    for i in range(len(data_segs)):
+    for seg in data_segs:
         recon_data_segs.append(
-            compute_single_model(
-                tdi_data=data_segs[i],
+            compute_model(
+                tdi_data=seg,
                 tdi_channel=tdi_channel,
                 interferometer=interferometer,
                 mosa=mosa,
                 delay_data=delay_data,
-                t_range=(0, duration), #EDIT
+                t_range=(0, duration),
             )
         )
 
     model_psd = compute_averaged_psd(
         data_segs=recon_data_segs,
-        num_r=num_r,
-        duration=duration,
-        dt=dt,
+        dt=interp_dt,
     )
 
     return model_psd
 
 
 def compute_outliers(overlaps):
+    """Compute outlier scores given overlaps for each interferometer
+        comparison.
+
+    Args:
+        overlaps (dict<str:float>): Dictionary consisting of
+            interferometer:overlap pairs.
+
+    Returns:
+        Outlier scores for each interferometer (dict<str:float>)
+    """
     outliers = {}
 
     keys = list(overlaps.keys())
@@ -471,7 +650,7 @@ def compute_outliers(overlaps):
 
     for i in range(len(keys)):
         omitted = values[i]
-        others = values[:i] + values[i+1:]
+        others = values[:i] + values[i + 1 :]
 
         average_others = np.average(others)
         std_others = np.std(others)
@@ -482,9 +661,36 @@ def compute_outliers(overlaps):
 
 
 def tdi_backtracking(
-    anomaly_input_fn, simulation_input_fn, tdi_input_fn, pipe_input_fn,
-    min_anomaly_i, max_anomaly_i, results_output_fn, make_plots=False,
+    anomaly_input_fn,
+    simulation_input_fn,
+    tdi_input_fn,
+    pipe_input_fn,
+    min_anomaly_i,
+    max_anomaly_i,
+    results_output_fn,
+    make_plots,
 ):
+    """Apply tdi-backtracking on a set of anomalies and save results for each
+        anomaly as txt file.
+
+    Args:
+        anomaly_input_fn (str): Anomaly txt information file name (excluding
+            file extensions).
+        simulation_input_fn (str): Simulation h5 data file name (excluding
+            file extensions).
+        tdi_input_fn (str): TDI h5 data file name (excluding file extensions).
+        pipe_input_fn (str): Pipeline txt data file name (excluding file
+            extension).
+        min_anomaly_i (int): Minimum anomaly index to process.
+        max_anomaly_i (int): Maximum anomaly index to process.
+        results_output_fn (str): Results txt data output file name (excluding
+            file extensions).
+        make_plots (bool): Whether or not to make plots for internal
+            performance of each model made.
+
+    Returns:
+        None
+    """
     anomaly_data_path = PATH_anomaly_data + anomaly_input_fn + ".txt"
     pipe_data_path = PATH_pipe_data + pipe_input_fn + ".txt"
     results_output_path = PATH_tdi_backtracking_results + results_output_fn + ".txt"
@@ -495,10 +701,12 @@ def tdi_backtracking(
 
     t0 = pipe_data_float[0]
     dt = pipe_data_float[1]
+    interp_dt = dt / INTERP_FACTOR
 
     expected_inj_points = anomaly_data_str[0:, 1]
     t_injs = anomaly_data_float[0:, 2]
     levels = anomaly_data_float[0:, 3]
+    durations = anomaly_data_float[0:, 4]
 
     num_anomalies = len(expected_inj_points)
 
@@ -515,8 +723,8 @@ def tdi_backtracking(
             for mosa in MOSAS:
                 tdi_overlaps = []
                 for tdi_channel in ETA_TDI[mosa]:
-                    sample_duration = 140
-                    t_range = t_inj - t0 + (0, sample_duration)
+                    duration = durations[anomaly_i] + 10 - 5 * 8
+                    t_range = t_inj - t0 + (0, duration)
 
                     sim_data, delay_data = init_simulation_data(
                         simulation_input_fn=simulation_input_fn,
@@ -524,6 +732,7 @@ def tdi_backtracking(
                         mosa=mosa,
                         t_range=t_range,
                         dt=dt,
+                        interp_dt=interp_dt,
                         t0=t0,
                     )
 
@@ -532,10 +741,11 @@ def tdi_backtracking(
                         tdi_channel=tdi_channel,
                         t_range=t_range,
                         dt=dt,
+                        interp_dt=interp_dt,
                         t0=t0,
                     )
 
-                    model = compute_single_model(
+                    model = compute_model(
                         tdi_data=tdi_data,
                         tdi_channel=tdi_channel,
                         interferometer=interferometer,
@@ -544,11 +754,7 @@ def tdi_backtracking(
                         t_range=t_range,
                     )
 
-                    duration = 100
-                    sim_data = sim_data[:int(duration/dt)]
-                    model = model[:int(duration/dt)]
-
-                    num_r = 25 # number of noise realizations for psd estimations
+                    num_r = 10
 
                     interferometer_noise_psd = compute_interferometer_psd(
                         interferometer=interferometer,
@@ -556,6 +762,7 @@ def tdi_backtracking(
                         num_r=num_r,
                         duration=duration,
                         dt=dt,
+                        interp_dt=interp_dt,
                         t0=t0,
                     )
 
@@ -567,21 +774,36 @@ def tdi_backtracking(
                         num_r=num_r,
                         duration=duration,
                         dt=dt,
+                        interp_dt=interp_dt,
                         t0=t0,
                     )
 
-                    idx_cutoff = int(len(model_noise_psd.get_sample_frequencies()) * FREQUENCY_BAND_COEFF)
+                    idx_cutoff = int(
+                        len(model_noise_psd.get_sample_frequencies())
+                        * (LOW_PASS_CUTOFF / model_noise_psd.get_sample_frequencies()[-1])
+                    )
 
-                    sim_data_fs = sim_data.to_frequencyseries(delta_f=model_noise_psd.delta_f)[:idx_cutoff]
-                    model_fs = model.to_frequencyseries(delta_f=model_noise_psd.delta_f)[:idx_cutoff]
-                    psd = (interferometer_noise_psd + model_noise_psd)[:idx_cutoff]
+                    sim_data_fs = sim_data.to_frequencyseries(
+                        delta_f=model_noise_psd.delta_f
+                    )[:idx_cutoff]
 
-                    overlap = round(abs(matchedfilter.overlap(model_fs, sim_data_fs, psd=psd)), 3)
+                    model_fs = model.to_frequencyseries(
+                        delta_f=model_noise_psd.delta_f
+                    )[:idx_cutoff]
+
+                    psd = (
+                        interferometer_noise_psd + model_noise_psd
+                    )[:idx_cutoff]
+
+                    overlap = round(
+                        abs(matchedfilter.overlap(model_fs, sim_data_fs, psd=psd)),
+                        3,
+                    )
 
                     tdi_overlaps.append(overlap)
 
                     if make_plots:
-                        plot_overlap(
+                        plot(
                             sim_data=sim_data,
                             sim_data_fs=sim_data_fs,
                             tdi_data=tdi_data,
@@ -603,12 +825,15 @@ def tdi_backtracking(
             expected_inj_point = f"{expected_inj_point[8:11]}_{expected_inj_point[-2:]}"
 
         with open(results_output_path, "a") as f:
-            output = f"{anomaly_i} {levels[anomaly_i]} {predicted_inj_point} {expected_inj_point} "
+            output = f"{anomaly_i} {durations[anomaly_i]} {levels[anomaly_i]} {predicted_inj_point} {expected_inj_point} "
             for key, value in outliers.items():
                 output += f"{value} "
             f.write(output[:-1] + "\n")
 
-        print(f"Anomaly {anomaly_i - min_anomaly_i} processed from subset [{min_anomaly_i},{max_anomaly_i - 1}] from parent set of {num_anomalies} points")
+        print(
+            f"Anomaly {anomaly_i - min_anomaly_i} processed from subset " +
+            f"[{min_anomaly_i},{max_anomaly_i - 1}] from parent set of {num_anomalies} points"
+        )
 
 
 if __name__ == "__main__":
@@ -625,13 +850,13 @@ if __name__ == "__main__":
         results_output_fn=cl_args.process + "results",
     )
 
-    # name = "gw_test"
     # tdi_backtracking(
-    #     anomaly_input_txt=name + ".txt",
-    #     simulation_input_h5=name + ".h5",
-    #     tdi_input_h5=name + ".h5",
-    #     make_plots=True,
+    #     anomaly_input_fn="long500",
+    #     simulation_input_fn="long500",
+    #     tdi_input_fn="long500",
+    #     pipe_input_fn="long500",
+    #     make_plots=False,
     #     min_anomaly_i=cl_args.min_anomaly_i,
     #     max_anomaly_i=cl_args.max_anomaly_i,
-    #     output_txt=process + "results.txt",
+    #     results_output_fn=cl_args.process + "results",
     # )

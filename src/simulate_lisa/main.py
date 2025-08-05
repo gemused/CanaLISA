@@ -1,13 +1,21 @@
+"""
+Filename: main.py
+Author: William Mostrenko
+Created: 2025-06-16
+Description: Commandline organizer for LISA simulations.
+"""
+
 from inject_anomalies import inject_anomalies
 import argparse
 from make_anomalies import make_anomalies
 
 
 def init_cl():
-    """Initialize commandline arguments and return Namespace object with all
-    given commandline arguments.
-    """
+    """Initialize commandline arguments.
 
+    Returns:
+    Commandline arguments (namespace)
+    """
     parser = argparse.ArgumentParser()
 
     # FILE MANAGEMENT
@@ -84,6 +92,7 @@ def init_cl():
 
 
 def main():
+    """Simulates LISA with glitches and gws in specified config files."""
     args = init_cl()
 
     make_anomalies(

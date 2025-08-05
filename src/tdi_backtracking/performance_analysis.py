@@ -1,3 +1,10 @@
+"""
+Filename: performance_analysis.py
+Author: William Mostrenko
+Created: 2025-07-16
+Description: Analysis tools for tdi-backtracking performance.
+"""
+
 import os
 import matplotlib.pyplot as plt
 import numpy as np
@@ -9,13 +16,13 @@ PATH_tdi_backtracking_plots = os.path.join(PATH_bethLISA,
 PATH_tdi_backtracking_results = os.path.join(PATH_bethLISA,
                                              "dist/tdi_backtracking/results/")
 PATH_tdi_backtracking_performance_plots = os.path.join(PATH_bethLISA,
-                                                 "dist/tdi_backtracking/performance_plots/")
+                                                       "dist/tdi_backtracking/performance_plots/")
 INTERFEROMETERS = ["isi", "tmi", "rfi"]
 MOSAS = ["12", "23", "31", "13", "32", "21"]
-GLITCH_CANDIDATE_THRESHOLD = 6
+GLITCH_CANDIDATE_THRESHOLD = 8
 
 
-def plot_overlap(
+def plot(
     sim_data, sim_data_fs, tdi_data, tdi_channel, model, model_fs, psd,
     overlap, plot_output
 ):
@@ -169,10 +176,10 @@ def plot_anomaly_outlier_distributions(glitches, gws):
             glitch_success_outliers.append(max(glitch["outliers"].items(), key=lambda x: x[1])[1])
         else:
             glitch_unsuccess_outliers.append(max(glitch["outliers"].items(), key=lambda x: x[1])[1])
-    
+
     for gw in gws:
         gw_outliers.append(max(gw["outliers"].items(), key=lambda x: x[1])[1])
-    
+
     figure, axis = plt.subplots(1, 1, figsize=(8, 4))
 
     max_bin = int(max(glitch_success_outliers + glitch_unsuccess_outliers)) + 1
@@ -190,7 +197,7 @@ def plot_anomaly_outlier_distributions(glitches, gws):
     plt.savefig(PATH_tdi_backtracking_performance_plots + "anomaly_outlier_distrbution.png")
 
 
-def init_anomalies(levels, predicted, expected, outliers):
+def init_anomalies(durations, levels, predicted, expected, outliers):
     anomalies = []
     gws = []
     glitches = []
@@ -210,6 +217,7 @@ def init_anomalies(levels, predicted, expected, outliers):
 
         anomaly = {
             "i": i,
+            "duration": durations[i],
             "level": levels[i],
             "predicted": predicted[i],
             "expected": expected[i],
@@ -236,7 +244,7 @@ def filter_anomalies(anomalies, condition):
 
 
 def print_anomaly(anomaly):
-    print(f"{anomaly['i']} -- SUSPECT_GW: {anomaly['suspect_gw']} -- PREDICTED: {anomaly['predicted']} -- EXPECTED: {anomaly['expected']} -- LEVEL: {anomaly['level']} -- OUTLIER: {max(list(anomaly['outliers'].values()))}")
+    print(f"{anomaly['i']} -- SUSPECT_GW: {anomaly['suspect_gw']} -- PREDICTED: {anomaly['predicted']} -- EXPECTED: {anomaly['expected']} -- LEVEL: {anomaly['level']} -- DURATION: {anomaly['duration']} -- OUTLIER: {max(list(anomaly['outliers'].values()))}")
 
 
 def print_performance(glitches, gws):
@@ -293,24 +301,29 @@ if __name__ == "__main__":
     if ".DS_Store" in os.listdir(PATH_tdi_backtracking_results):
         num_seg -= 1
 
+    num_seg = 6
+
+    durations = []
     levels = []
     identified = []
     predicted = []
     expected = []
     outliers = []
 
-    fn = "results_250"
+    fn = "results"
 
     for i in range(num_seg):
         glitch_info_str = np.genfromtxt(PATH_tdi_backtracking_results + f"{i}{fn}.txt", dtype=str)
         glitch_info_float = np.genfromtxt(PATH_tdi_backtracking_results + f"{i}{fn}.txt", dtype=float)
 
-        levels += map(int, list(glitch_info_float[0:, 1]))
-        predicted += list(glitch_info_str[0:, 2])
-        expected += list(glitch_info_str[0:, 3])
-        outliers += list(glitch_info_float[0:, 4:])
+        durations += map(int, list(glitch_info_float[0:, 1]))
+        levels += map(int, list(glitch_info_float[0:, 2]))
+        predicted += list(glitch_info_str[0:, 3])
+        expected += list(glitch_info_str[0:, 4])
+        outliers += list(glitch_info_float[0:, 5:])
 
     anomalies, gws, glitches = init_anomalies(
+        durations=durations,
         levels=levels,
         predicted=predicted,
         expected=expected,

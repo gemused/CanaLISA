@@ -1,5 +1,0 @@
-shape: "GWFRED"
-daily_rate: 50
-t_rise_range: [5, 20]
-t_fall_range: [5, 20]
-level_range: [1e-11, 5e-11]

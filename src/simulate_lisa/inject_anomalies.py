@@ -1,3 +1,11 @@
+"""
+Filename: inject_anomalies.py
+Author: William Mostrenko and Beth Flanagan
+Created: 2025-06-16
+Description: Simulate LISA with injected anomalies and compute 2nd generation
+Michelson tdi channels.
+"""
+
 import os
 import numpy as np
 from scipy.signal.windows import tukey
@@ -5,7 +13,6 @@ from pytdi.michelson import X2, Y2, Z2
 from gwpy.timeseries import TimeSeries, TimeSeriesDict
 from lisainstrument import Instrument
 from pytdi import Data
-
 
 PATH_src = os.path.abspath(os.path.join(os.getcwd(), os.pardir))
 PATH_bethLISA = os.path.abspath(os.path.join(PATH_src, os.pardir))
@@ -51,7 +58,7 @@ def simulate_lisa(
         dt (float): Sampling time steps for lisa instrument.
         size (float): Number of output data points in lisa simulation.
         disable_noise (bool): Whether or not to simulate LISA with noise.
-    
+
     Returns:
         None
     """
@@ -92,7 +99,7 @@ def compute_tdi(
         tdi_output_path (str): Path to save tdi data to.
         t0 (float): Initial time of simulation.
         dt (float): Sampling time steps for lisa instrument.
-    
+
     Returns:
         None
     """

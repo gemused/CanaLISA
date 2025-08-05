@@ -1,7 +1,0 @@
-glitch_0:
-  shape: "OneSidedDoubleExpGlitch"
-  inj_point: "readout_isi_carrier_12"
-  t_inj: 5000
-  t_rise: 5
-  t_fall: 20
-  level: 1e5

@@ -1,3 +1,10 @@
+"""
+Filename: make_orbits.py
+Author: William Mostrenko
+Created: 2025-06-16
+Description: Simulate LISA orbits and write to file.
+"""
+
 import os
 from lisaorbits import KeplerianOrbits
 
