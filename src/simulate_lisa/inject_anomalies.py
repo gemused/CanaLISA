@@ -32,12 +32,12 @@ def init_pipe(pipe_input_path):
 
     Args:
         pipe_input_path (str): System path to pipeline config file.
-    
+
     Returns:
         t0, dt, size of simulation (i.e. num data points in simulation)
     """
     pipe_input = np.genfromtxt(pipe_input_path, dtype=float)
- 
+
     return pipe_input[0], pipe_input[1], pipe_input[2]
 
 
@@ -143,7 +143,7 @@ def inject_anomalies(
         simulation_output_fn (str): Simulation h5 data output file name (excluding file extensions).
         tdi_output_fn (str): TDI h5 data output file name (excluding file extensions).
         disable_noise (bool): Whether or not to simulate LISA with noise.
-    
+
     Returns:
         None
     """

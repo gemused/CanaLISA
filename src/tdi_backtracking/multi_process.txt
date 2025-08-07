@@ -7,15 +7,15 @@ compute_seg() {
     python tdi_backtracking.py --anomaly_input_fn $anomaly_input_fn --simulation_input_fn $simulation_input_fn --tdi_input_fn $tdi_input_fn --pipe_input_fn $pipe_input_fn --min_anomaly_i $(($1 * $seg_len)) --max_anomaly_i $(((($1 + 1)) * $seg_len)) --process $1
 }
 
-#anomaly_input_fn="default_anomaly_output"
-#simulation_input_fn="default_simulation_output"
-#tdi_input_fn="default_tdi_output"
-#pipe_input_fn="default_pipe_output"
+anomaly_input_fn="default_anomaly_output"
+simulation_input_fn="default_simulation_output"
+tdi_input_fn="default_tdi_output"
+pipe_input_fn="default_pipe_output"
 
-anomaly_input_fn="long500"
-simulation_input_fn="long500"
-tdi_input_fn="long500"
-pipe_input_fn="long500"
+#anomaly_input_fn="long500"
+#simulation_input_fn="long500"
+#tdi_input_fn="long500"
+#pipe_input_fn="long500"
 
 num_processes=10
 num_anomalies=500

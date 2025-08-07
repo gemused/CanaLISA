@@ -159,37 +159,93 @@ Like the individually specified anomaly configuration files, glitch configs shou
 
 ## Adding Glitch Shapes
 
-The code is setup in such a way that it should be fairly ok to add new glitch shape support. This is done primarily through `lisaglitch`. There are two ways of doing this. The first is similar to adding new gravitational wave shapes via subclassing, so this section will go over the second which is adding shapes already implemented via `lisaglitch`, using `lisaglitch.StepGlitch` as an example. All the following work will be done in `~/src/simulate_lisa/make_anomalies.py`.
+The code is setup in such a way that it should be fairly ok to add new glitch shape support. This is done primarily through `lisaglitch`. As an example, let's walk through how to add the ReducedOneSidedDoubleExp glitch shape already implemented.
 
-1. Import `lisaglitch.StepGlitch`:
+1. In `~/src/simulate_lisa/glitch_shapes.py`, create a new subclass from the abstract class `lisaglitch.Glitch` defining the methods `comptue_duration` and `compute_signal`. Also add any parameters your model may need as well as defining a `duration` property that is equal to whatever you implement `compute_duration` to be. Furthermore, I'd recomend mathematically deriving elements in the model directly contribute to amplitude so you can use amplitude as a parameter, then define other parameters that actually go into the computation of the model using the amplitude you inputted. This allows a decoupling between duration and amplitude of the glitch.
     ~~~python
-    from lisaglitch import StepGlitch
+    class ReducedOneSidedDoubleExpGlitch(Glitch):
+        """Represents a one-sided double exponential glitch in the case where t_rise=t_fall
+
+        Args:
+            t_rise: Rising timescale
+            t_fall: Falling timescale
+            amp: relative amplitude
+        """
+
+        def __init__(
+            self,
+            t_fall: float,
+            amp: float,
+            **kwargs,
+        ) -> None:
+            super().__init__(**kwargs)
+
+            self.t_fall = float(t_fall)
+            self.amp = float(amp)
+            self.level = self.amp * self.t_fall
+            self.duration = self.compute_duration()
+
+        def compute_duration(self) -> float:
+            # stub
+
+        def compute_signal(self, t) -> np.ndarray:
+            # stub
     ~~~
-2. In `compute_anomalies_params` in the if-statement block that is called when a glitch is chosen to be made at random, add a new elif statement that appends a dictionary with all of the glitch's params to `glitches_params`:
+2. Implement the `compute_duration` function. This should return an approximation for the duration of the glitch. The below implementation returns the time at which a `ReducedOneSidedDoubleExpGlitch` glitch reaches $\approx 3\%$ of its maximum amplitude.
+    ~~~python
+    def compute_duration(self) -> float:
+        """compute an approximate duration for the glitch"""
+        roots = lambda t: self.compute_signal(t) - self.amp / 30
+
+        guess = self.t_fall + 50
+
+        return float(fsolve(roots, guess)[0])
+    ~~~
+3. Implement the `compute_signal` function takes in an array of times and returns the mathematical model for your glitch shape applied to those times.
+    ~~~python
+    def compute_signal(self, t) -> np.ndarray:
+        """Computes the FRED response model.
+
+        Args:
+            t (array-like): Times to compute glitch model for.
+
+        Returns:
+            Computed FRED model (array-like)
+        """
+        delta_t = t - self.t_inj
+
+        signal = self.level * delta_t * np.exp(-delta_t / self.t_fall) / self.t_fall**2
+
+        return np.where(delta_t >= 0, signal, 0)
+    ~~~
+4. Now all the remaining steps will be done in `~/src/simulate_lisa/make_anomalies.py`. In `compute_anomalies_params` in the if-statement block that is called when a glitch is chosen to be made at random, add a new elif statement that appends a dictionary with all of the glitch's params to `glitches_params`.
     ~~~python
     ...
-    elif glitch_cfg["shape"] == "StepGlitch":
-        level_range = glitch_cfg["level_range"]
+    elif glitch_cfg["shape"] == "ReducedOneSidedDoubleExpGlitch":
+        t_fall_range = glitch_cfg["t_fall_range"]
+        amp_range = glitch_cfg["amp_range"]
 
         glitches_params.append(
             {
-                "shape": "StepGlitch",
+                "shape": "ReducedOneSidedDoubleExpGlitch",
                 "inj_point": np.random.choice(glitch_cfg["inj_points"]),
-                "level": np.random.uniform(float(level_range[0]), float(level_range[1])),
+                "t_fall": np.random.randint(t_fall_range[0], t_fall_range[1]),
+                "amp": np.random.uniform(float(amp_range[0]), float(amp_range[1])),
                 "t_inj": t_inj,
             }
         )
     ...
     ~~~
-3. In `compute_glitches`, add a new elif statement that creates the glitch object and appends it to `glitches`:
+5. In `compute_glitches`, add a new elif statement that creates the glitch object and appends it to `glitches`.
     ~~~python
     ...
-    elif glitch_params["shape"] == "StepGlitch":
+    elif glitch_params["shape"] == "ReducedOneSidedDoubleExpGlitch":
         glitches.append(
-            StepGlitch(
+            ReducedOneSidedDoubleExpGlitch(
                 inj_point=glitch_params["inj_point"],
                 t_inj=glitch_params["t_inj"],
-                level=glitch_params["level"],
+                t_fall=glitch_params["t_fall"],
+                amp=glitch_params["amp"],
                 t0=t0,
                 size=size,
                 dt=dt,
@@ -197,114 +253,114 @@ The code is setup in such a way that it should be fairly ok to add new glitch sh
         )
     ...
     ~~~
-4. In `write` add the following elif statement for writing specific glitch information to the glitch txt data:
+6. In `write` add the following elif statement for writing specific glitch information to the glitch txt data.
     ~~~python
     ...
-    elif isinstance(glitch, StepGlitch):
-        f.write(f"StepGlitch {glitch.t_inj} {glitch.level} {anomaly.duration}\n")
+    elif isinstance(glitch, ReducedOneSidedDoubleExpGlitch):
+        f.write(f"ReducedOneSidedDoubleExpGlitch {glitch.t_inj} {glitch.amp} {glitch.t_fall} {glitch.duration}\n")
     ...
     ~~~
     Also add the following elif statement for writing specific glitch information to the anomnaly txt data:
     ~~~python
     ...
-    elif isinstance(anomaly, StepGlitch):
-        f.write(f"StepGlitch {anomaly.inj_point} {anomaly.t_inj} {anomaly.level} {anomaly.duration}\n")
+    elif isinstance(anomaly, ReducedOneSidedDoubleExpGlitch):
+        f.write(f"ReducedOneSidedDoubleExpGlitch {anomaly.inj_point} {anomaly.t_inj} {anomaly.amp} {anomaly.duration}\n")
     ...
     ~~~
 Now as long as you follow the correct formatting for the configuration files as described in *Configuration File Structures*, you should be all good to go!
 
 ## Adding Gravitational Wave Shapes
 
-Again, the code is setup in such a way that it should be fairly ok to add new gravitational wave shape support. This is done primarily through `lisagwresponse`. To do so will be almost identical to that for adding new glitch shapes, except instead of simply importing a class for the shape, we'll have to make our own. As an example, we'll add the FRED (Fast Rising Exponential Decay) gravitational wave shape. All the following work will be done in `~/src/simulate_lisa/make_anomalies.py`.
+Again, the code is setup in such a way that it should be fairly ok to add new gravitational wave shape support. This is done primarily through `lisagwresponse`. To do so will be almost identical to that for adding new glitch shapes. As an example, we'll add the ReducedOneSidedDoubleExp gravitational wave shape just as we had done for glitches.
 
-1. Create a new class for the gravitational wave shape by subclassing off of the abstract class `lisagwresponse.ResponseFromStrain`:
+1. In `~/src/simulate_lisa/gw_shapes.py`, create a new subclass from the abstract class `lisagwresponse.ResponseFromStrain` defining the methods `comptue_duration`, `compute_hcross` and `compute_hplus`. Also add any parameters your model may need as well as defining a `duration` property that is equal to whatever you implement `compute_duration` to be. Furthermore, I'd recomend mathematically deriving elements in the model directly contribute to amplitude so you can use amplitude as a parameter, then define other parameters that actually go into the computation of the model using the amplitude you inputted. This allows a decoupling between duration and amplitude of the gravitational wave.
     ~~~python
-    class GWFRED(ResponseFromStrain):
-    """Represents a one-sided double-exponential gw signal
-
-    Args:
-        t_rise: Rising timescale
-        t_fall: Falling timescale
-        level: amplitude
-    """
-    def __init__(
-        self,
-        t_rise: float,
-        t_fall: float,
-        level: float,
-        t_inj: float,
-        **kwargs,
-    ) -> None:
-        super().__init__(**kwargs)
-
-        self.t_rise = float(t_rise)
-        self.t_fall = float(t_fall)
-        self.level = float(level)
-        self.t_inj = float(t_inj)
-
-    def compute_hcross(self, t):
-        # stub
-
-    def compute_hplus(self, t):
-        # stub
-    ~~~
-
-2. Implement the two methods `compute_hcross` and `compute_hplus` to apply the FRED mathematical shape and return the array `t` with FRED applied (only `compute_hcross` implementation is shown below):
-    ~~~python
-    ...
-    def compute_hcross(self, t):
-        """Computes the FRED response model.
+    class ReducedOneSidedDoubleExpGW(ResponseFromStrain):
+        """Represents a one-sided double-exponential gw in the case where t_rise=t_fall
 
         Args:
-            t (array-like): Times to compute GW strain for.
+            t_rise: Rising timescale
+            t_fall: Falling timescale
+            amp: relative amplitude scale
+        """
+        def __init__(
+            self,
+            t_fall: float,
+            amp: float,
+            t_inj: float,
+            **kwargs,
+        ) -> None:
+            super().__init__(**kwargs)
+
+            self.t_fall = float(t_fall)
+            self.amp = float(amp)
+            self.level = self.amp * self.t_fall
+            self.t_inj = float(t_inj)
+            self.duration = self.compute_duration()
+
+        def compute_duration(self) -> float:
+            # stub
+
+        def compute_hcross(self, t) -> np.ndarray:
+            # stub
+
+        def compute_hplus(self, t) -> np.ndarray:
+            # stub
+    ~~~
+2. Implement the `compute_duration` function. This should return an approximation for the duration of the gravitational wave. The below implementation returns the time at which a `ReducedOneSidedDoubleExpGW` gravitational wave reaches $\approx 3\%$ of its maximum amplitude.
+    ~~~python
+    def compute_duration(self) -> float:
+        """compute an approximate duration for the gw"""
+        roots = lambda t: self.compute_signal(t) - self.amp / 30
+
+        guess = self.t_fall + 50
+
+        return float(fsolve(roots, guess)[0])
+    ~~~
+3. Implement the two methods `compute_hcross` and `compute_hplus` to apply the mathematical shape for your gravitational wave and return the array `t` with shape applied (only `compute_hcross` implementation is shown below).
+    ~~~python
+    def compute_signal(self, t) -> np.ndarray:
+        """Computes the one-sided double exponential model in the case where t_rise=t_fall.
+
+        Args:
+            t (array-like): Times to compute GW model for.
 
         Returns:
-            Computed FRED model (array-like)
+            Computed model (array-like)
         """
-        offset = 20
-        delta_t = t - self.t_inj + offset + (8.5 / 86400) * (self.t_inj - t0)
+        offset = 405
+        delta_t = t - self.t_inj + offset
 
-        if self.t_rise != self.t_fall:
-            exp_terms = np.exp(-delta_t / self.t_rise) - np.exp(-delta_t / self.t_fall)
-            signal = self.level * exp_terms / (self.t_rise - self.t_fall)
-        else:
-            signal = self.level * delta_t * np.exp(-delta_t / self.t_fall) / self.t_fall**2
+        signal = self.level * delta_t * np.exp(-delta_t / self.t_fall) / self.t_fall**2
 
         return np.where(delta_t >= 0, signal, 0)
-    ...
     ~~~
-3. In `compute_anomalies_params` in the if-statement block that is called when a gravitational wave is chosen to be made at random, add a new elif statement that appends a dictionary with all of the gravitational wave's params to `gws_params`:
+4. Now all the remaining steps will be done in `~/src/simulate_lisa/make_anomalies.py`. In `compute_anomalies_params` in the if-statement block that is called when a gravitational wave is chosen to be made at random, add a new elif statement that appends a dictionary with all of the gravitational wave's params to `gws_params`.
     ~~~python
     ...
-    elif gw_cfg["shape"] == "GWFRED":
+    elif gw_cfg["shape"] == "ReducedOneSidedDoubleExpGW":
         t_fall_range = gw_cfg["t_fall_range"]
         amp_range = gw_cfg["amp_range"]
 
-        amp = np.random.uniform(float(amp_range[0]), float(amp_range[1]))
-        t_fall = np.random.randint(t_fall_range[0], t_fall_range[1])
-        level = amp * t_fall
-
         gws_params.append(
             {
-                "shape": "GWFRED",
-                "t_rise": t_fall,
-                "t_fall": t_fall,
-                "level": level,
+                "shape": "ReducedOneSidedDoubleExpGW",
+                "t_fall": np.random.randint(t_fall_range[0], t_fall_range[1]),
+                "amp": np.random.uniform(float(amp_range[0]), float(amp_range[1])),
                 "t_inj": t_inj,
             }
         )
     ...
     ~~~
-4. In `compute_gws`, add a new elif statement that creates the glitch object and appends it to `glitches`:
+5. In `compute_gws`, add a new elif statement that creates the glitch object and appends it to `glitches`.
     ~~~python
     ...
-    elif gw_params["shape"] == "GWFRED":
+    elif gw_params["shape"] == "ReducedOneSidedDoubleExpGW":
         gws.append(
-            GWFRED(
+            ReducedOneSidedDoubleExpGW(
                 t_inj=gw_params["t_inj"],
-                t_rise=gw_params["t_fall"],
                 t_fall=gw_params["t_fall"],
-                level=gw_params["level"],
+                amp=gw_params["amp"],
                 gw_beta=gw_beta,
                 gw_lambda=gw_lambda,
                 orbits=PATH_orbits_data + orbits_input_fn + ".h5",
@@ -315,18 +371,18 @@ Again, the code is setup in such a way that it should be fairly ok to add new gr
         )
     ...
     ~~~
-5. In `write` add the following elif statement for writing specific gravitational wave information to the gravitational wave txt data:
+6. In `write` add the following elif statement for writing specific gravitational wave information to the gravitational wave txt data.
     ~~~python
     ...
-    elif isinstance(gw, GWFRED):
-        f.write(f"GWFRED {gw.t_inj} {gw.amp} {gw.t_rise} {gw.t_fall} {gw.duration}\n")
+    if isinstance(gw, ReducedOneSidedDoubleExpGW):
+        f.write(f"ReducedOneSidedDoubleExpGW {gw.t_inj} {gw.amp} {gw.t_fall} {gw.duration}\n")
     ...
     ~~~
     Also add the following elif statement for writing specific gravitational wave information to the anomnaly txt data:
     ~~~python
     ...
-    elif isinstance(anomaly, GWFRED):
-        f.write(f"GWBurst gw {anomaly.t_inj} {gw.amp} {gw.duration}\n")
+    elif isinstance(anomaly, ReducedOneSidedDoubleExpGW):
+        f.write(f"ReducedOneSidedDoubleExpGW gw {anomaly.t_inj} {anomaly.amp} {anomaly.duration}\n")
     ...
     ~~~
 If you repeat and adapt the above procedure for your given gravitational wave shape you should be able to start adding them to your simulations!

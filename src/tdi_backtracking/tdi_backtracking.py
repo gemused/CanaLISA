@@ -723,7 +723,7 @@ def tdi_backtracking(
             for mosa in MOSAS:
                 tdi_overlaps = []
                 for tdi_channel in ETA_TDI[mosa]:
-                    duration = durations[anomaly_i] + 10 - 5 * 8
+                    duration = durations[anomaly_i] + 10
                     t_range = t_inj - t0 + (0, duration)
 
                     sim_data, delay_data = init_simulation_data(
@@ -844,18 +844,18 @@ if __name__ == "__main__":
         simulation_input_fn=cl_args.simulation_input_fn,
         tdi_input_fn=cl_args.tdi_input_fn,
         pipe_input_fn=cl_args.pipe_input_fn,
-        make_plots=False,
+        make_plots=True,
         min_anomaly_i=cl_args.min_anomaly_i,
         max_anomaly_i=cl_args.max_anomaly_i,
         results_output_fn=cl_args.process + "results",
     )
 
     # tdi_backtracking(
-    #     anomaly_input_fn="long500",
-    #     simulation_input_fn="long500",
-    #     tdi_input_fn="long500",
-    #     pipe_input_fn="long500",
-    #     make_plots=False,
+    #     anomaly_input_fn="newlong500",
+    #     simulation_input_fn="newlong500",
+    #     tdi_input_fn="newlong500",
+    #     pipe_input_fn="newlong500",
+    #     make_plots=True,
     #     min_anomaly_i=cl_args.min_anomaly_i,
     #     max_anomaly_i=cl_args.max_anomaly_i,
     #     results_output_fn=cl_args.process + "results",

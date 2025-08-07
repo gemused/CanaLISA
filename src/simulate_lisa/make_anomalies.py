@@ -7,13 +7,10 @@ in config files.
 """
 
 import os
-import sys
-import lisaglitch
 import numpy as np
 import ldc.io.yml as ymlio
-import argparse
-from lisagwresponse import ResponseFromStrain
-from lisaglitch import OneSidedDoubleExpGlitch, TwoSidedDoubleExpGlitch, StepGlitch
+from glitch_shapes import ReducedOneSidedDoubleExpGlitch
+from gw_shapes import ReducedOneSidedDoubleExpGW
 from scipy.optimize import fsolve
 
 PATH_src = os.path.abspath(os.path.join(os.getcwd(), os.pardir))
@@ -27,56 +24,6 @@ PATH_pipe_data = os.path.join(PATH_bethLISA, "dist/pipe/pipe_data/")
 PATH_orbits_data = os.path.join(PATH_bethLISA, "dist/lisa_data/orbits_data/")
 PATH_anomaly_data = os.path.join(PATH_bethLISA, "dist/tdi_backtracking/anomaly_data/")
 t0 = 10368000
-
-
-class GWFRED(ResponseFromStrain):
-    """Represents a one-sided double-exponential gw signal
-
-    Args:
-        t_rise: Rising timescale
-        t_fall: Falling timescale
-        level: amplitude
-    """
-    def __init__(
-        self,
-        t_rise: float,
-        t_fall: float,
-        level: float,
-        t_inj: float,
-        **kwargs,
-    ) -> None:
-        super().__init__(**kwargs)
-
-        self.t_rise = float(t_rise)
-        self.t_fall = float(t_fall)
-        self.level = float(level)
-        self.t_inj = float(t_inj)
-
-    def compute_hcross(self, t):
-        return self.compute_signal(t)
-
-    def compute_hplus(self, t):
-        return self.compute_signal(t)
-
-    def compute_signal(self, t):
-        """Computes the FRED response model.
-
-        Args:
-            t (array-like): Times to compute GW model for.
-
-        Returns:
-            Computed FRED model (array-like)
-        """
-        offset = 20
-        delta_t = t - self.t_inj + offset + (8.5 / 86400) * (self.t_inj - t0)
-
-        if self.t_rise != self.t_fall:
-            exp_terms = np.exp(-delta_t / self.t_rise) - np.exp(-delta_t / self.t_fall)
-            signal = self.level * exp_terms / (self.t_rise - self.t_fall)
-        else:
-            signal = self.level * delta_t * np.exp(-delta_t / self.t_fall) / self.t_fall**2
-
-        return np.where(delta_t >= 0, signal, 0)
 
 
 def make_t_injs(glitch_rate, gw_rate, duration, window):
@@ -94,19 +41,7 @@ def make_t_injs(glitch_rate, gw_rate, duration, window):
     t_injs = []
 
     for i in range(int((glitch_rate + gw_rate) * duration / 86400)):
-        invalid_t_inj = True
-        while invalid_t_inj:
-            t_inj = np.random.randint(t0, t0 + duration)
-            if t_injs:
-                for t in t_injs:
-                    if t_inj < t + window and t_inj > t - window and t_inj + window < t0 + duration:
-                        invalid_t_inj = True
-                        break
-                    else:
-                        invalid_t_inj = False
-            else:
-                invalid_t_inj = False
-        t_injs.append(t_inj)
+        t_injs.append(t0 + window * i)
 
     return t_injs
 
@@ -137,69 +72,31 @@ def compute_anomalies_params(
 
     for t_inj in t_injs:
         if np.random.choice((True, False), p=(glitch_cfg["daily_rate"] / anomaly_rate, gw_cfg["daily_rate"] / anomaly_rate)):
-            if glitch_cfg["shape"] == "OneSidedDoubleExpGlitch":
+            if glitch_cfg["shape"] == "ReducedOneSidedDoubleExpGlitch":
                 t_fall_range = glitch_cfg["t_fall_range"]
                 amp_range = glitch_cfg["amp_range"]
 
-                amp = np.random.uniform(float(amp_range[0]), float(amp_range[1]))
-                t_fall = np.random.randint(t_fall_range[0], t_fall_range[1])
-                level = amp * t_fall
-
                 glitches_params.append(
                     {
-                        "shape": "OneSidedDoubleExpGlitch",
+                        "shape": "ReducedOneSidedDoubleExpGlitch",
                         "inj_point": np.random.choice(glitch_cfg["inj_points"]),
-                        "t_rise": t_fall,
-                        "t_fall": t_fall,
-                        "level": level,
-                        "t_inj": t_inj,
-                    }
-                )
-            elif glitch_cfg["shape"] == "TwoSidedDoubleExpGlitch":
-                t_rise_range = glitch_cfg["t_rise_range"]
-                t_fall_range = glitch_cfg["t_fall_range"]
-                level_range = glitch_cfg["level_range"]
-                displacement_range = glitch_cfg["displacement_range"]
-
-                glitches_params.append(
-                    {
-                        "shape": "TwoSidedDoubleExpGlitch",
-                        "inj_point": np.random.choice(glitch_cfg["inj_points"]),
-                        "t_rise": np.random.randint(t_rise_range[0], t_rise_range[1]),
                         "t_fall": np.random.randint(t_fall_range[0], t_fall_range[1]),
-                        "level": np.random.uniform(float(level_range[0]), float(level_range[1])),
-                        "displacement": np.random.uniform(float(displacement_range[0]), float(displacement_range[1])),
-                        "t_inj": t_inj,
-                    }
-                )
-            elif glitch_cfg["shape"] == "StepGlitch":
-                level_range = glitch_cfg["level_range"]
-
-                glitches_params.append(
-                    {
-                        "shape": "StepGlitch",
-                        "inj_point": np.random.choice(glitch_cfg["inj_points"]),
-                        "level": np.random.uniform(float(level_range[0]), float(level_range[1])),
+                        "amp": np.random.uniform(float(amp_range[0]), float(amp_range[1])),
                         "t_inj": t_inj,
                     }
                 )
             else:
                 raise AttributeError("Unsupported glitch shape")
         else:
-            if gw_cfg["shape"] == "GWFRED":
+            if gw_cfg["shape"] == "ReducedOneSidedDoubleExpGW":
                 t_fall_range = gw_cfg["t_fall_range"]
                 amp_range = gw_cfg["amp_range"]
 
-                amp = np.random.uniform(float(amp_range[0]), float(amp_range[1]))
-                t_fall = np.random.randint(t_fall_range[0], t_fall_range[1])
-                level = amp * t_fall
-
                 gws_params.append(
                     {
-                        "shape": "GWFRED",
-                        "t_rise": t_fall,
-                        "t_fall": t_fall,
-                        "level": level,
+                        "shape": "ReducedOneSidedDoubleExpGW",
+                        "t_fall": np.random.randint(t_fall_range[0], t_fall_range[1]),
+                        "amp": np.random.uniform(float(amp_range[0]), float(amp_range[1])),
                         "t_inj": t_inj,
                     }
                 )
@@ -223,39 +120,13 @@ def compute_glitches(glitches_params, dt, size):
     glitches = []
 
     for glitch_params in glitches_params:
-        if glitch_params["shape"] == "OneSidedDoubleExpGlitch":
+        if glitch_params["shape"] == "ReducedOneSidedDoubleExpGlitch":
             glitches.append(
-                OneSidedDoubleExpGlitch(
+                ReducedOneSidedDoubleExpGlitch(
                     inj_point=glitch_params["inj_point"],
                     t_inj=glitch_params["t_inj"],
-                    t_rise=glitch_params["t_fall"],
                     t_fall=glitch_params["t_fall"],
-                    level=glitch_params["level"],
-                    t0=t0,
-                    size=size,
-                    dt=dt,
-                )
-            )
-        elif glitch_params["shape"] == "TwoSidedDoubleExpGlitch":
-            glitches.append(
-                TwoSidedDoubleExpGlitch(
-                    inj_point=glitch_params["inj_point"],
-                    t_inj=glitch_params["t_inj"],
-                    t_rise=glitch_params["t_rise"],
-                    t_fall=glitch_params["t_fall"],
-                    level=glitch_params["level"],
-                    displacement=glitch_params["displacement"],
-                    t0=t0,
-                    size=size,
-                    dt=dt,
-                )
-            )
-        elif glitch_params["shape"] == "StepGlitch":
-            glitches.append(
-                StepGlitch(
-                    inj_point=glitch_params["inj_point"],
-                    t_inj=glitch_params["t_inj"],
-                    level=glitch_params["level"],
+                    amp=glitch_params["amp"],
                     t0=t0,
                     size=size,
                     dt=dt,
@@ -284,13 +155,12 @@ def compute_gws(gws_params, orbits_input_fn, dt, size):
         gw_beta = 0#np.random.uniform(-np.pi/2, np.pi/2)
         gw_lambda = np.pi/7#np.random.uniform(-np.pi/2, np.pi/2)
 
-        if gw_params["shape"] == "GWFRED":
+        if gw_params["shape"] == "ReducedOneSidedDoubleExpGW":
             gws.append(
-                GWFRED(
+                ReducedOneSidedDoubleExpGW(
                     t_inj=gw_params["t_inj"],
-                    t_rise=gw_params["t_fall"],
                     t_fall=gw_params["t_fall"],
-                    level=gw_params["level"],
+                    amp=gw_params["amp"],
                     gw_beta=gw_beta,
                     gw_lambda=gw_lambda,
                     orbits=PATH_orbits_data + orbits_input_fn + ".h5",
@@ -348,21 +218,15 @@ def write(
 
     with open(f"{glitch_output_path_txt}", "w") as f:
         for glitch in glitches:
-            if isinstance(glitch, OneSidedDoubleExpGlitch):
-                duration, amp = osde_properties(glitch)
-                f.write(f"OneSidedDoubleExpGlitch {glitch.t_inj} {amp} {glitch.t_rise} {glitch.t_fall} {duration}\n")
-            elif isinstance(glitch, TwoSidedDoubleExpGlitch):
-                f.write(f"TwiSidedDoubleExpGlitch {glitch.t_inj} {glitch.level} {glitch.t_rise} {glitch.t_fall} {glitch.displacement}\n") # NEED TO ADD DURATION
-            elif isinstance(glitch, StepGlitch):
-                f.write(f"StepGlitch {glitch.t_inj} {glitch.level}\n") # NEED TO ADD DURATION
+            if isinstance(glitch, ReducedOneSidedDoubleExpGlitch):
+                f.write(f"ReducedOneSidedDoubleExpGlitch {glitch.t_inj} {glitch.amp} {glitch.t_fall} {glitch.duration}\n")
             else:
                 raise AttributeError("Unsupported glitch shape")
 
     with open(f"{gws_output_path_txt}", "w") as f:
         for gw in gws:
-            if isinstance(gw, GWFRED):
-                duration, amp = osde_properties(gw)
-                f.write(f"GWFRED {gw.t_inj} {amp} {gw.t_rise} {gw.t_fall} {duration}\n")
+            if isinstance(gw, ReducedOneSidedDoubleExpGW):
+                f.write(f"ReducedOneSidedDoubleExpGW {gw.t_inj} {gw.amp} {gw.t_fall} {gw.duration}\n")
             else:
                 raise AttributeError("Unsupported gravitational wave shape")
 
@@ -373,34 +237,12 @@ def write(
         anomalies = glitches + gws
         anomalies.sort(key=lambda x: x.t_inj)
         for anomaly in anomalies:
-            if isinstance(anomaly, OneSidedDoubleExpGlitch):
-                duration, amp = osde_properties(anomaly)
-                f.write(f"OneSidedDoubleExpGlitch {anomaly.inj_point} {anomaly.t_inj} {amp} {duration}\n")
-            elif isinstance(anomaly, TwoSidedDoubleExpGlitch):
-                f.write(f"TwoSidedDoubleExpGlitch {anomaly.inj_point} {anomaly.t_inj} {anomaly.level}\n") # NEED TO ADD DURATION
-            elif isinstance(anomaly, StepGlitch):
-                f.write(f"StepGlitch {anomaly.inj_point} {anomaly.t_inj} {anomaly.level}\n") # NEED TO ADD DURATION
-            elif isinstance(anomaly, GWFRED):
-                duration, amp = osde_properties(anomaly)
-                f.write(f"GWBurst gw {anomaly.t_inj} {amp} {duration}\n")
+            if isinstance(anomaly, ReducedOneSidedDoubleExpGlitch):
+                f.write(f"ReducedOneSidedDoubleExpGlitch {anomaly.inj_point} {anomaly.t_inj} {anomaly.amp} {anomaly.duration}\n")
+            elif isinstance(anomaly, ReducedOneSidedDoubleExpGW):
+                f.write(f"ReducedOneSidedDoubleExpGW gw {anomaly.t_inj} {anomaly.amp} {anomaly.duration}\n")
             else:
                 raise AttributeError("Unsupported anomaly shape")
-
-
-def osde_properties(anomaly):
-    t_fall = anomaly.t_fall
-    level = anomaly.level
-
-    amp = level / (t_fall * np.exp(1))
-    t_max = t_fall
-    guess = t_max + 50
-
-    roots = lambda t: g_FRED(t) - amp / 30
-    g_FRED = lambda t: (level * (t / (t_fall ** 2)) * np.exp(-t / t_fall))
-
-    duration = int(fsolve(roots, guess)[0] + 5*8)
-
-    return duration, amp
 
 
 def make_anomalies(
@@ -418,7 +260,7 @@ def make_anomalies(
         glitch_output_fn (str): Glitch h5/txt data output file name (excluding file extensions).
         gw_output_fn (str): GW h5/txt data output file name (excluding file extensions).
         pipe_output_fn (str): Pipeline txt data output file name (excluding file extensions).
-        anomaly_output_fn (str): Anomaly txt data output file name (excluding file extensions). 
+        anomaly_output_fn (str): Anomaly txt data output file name (excluding file extensions).
 
     Returns:
         None
@@ -455,7 +297,7 @@ def make_anomalies(
             t_injs=t_injs,
         )
     else:
-        raise AttributeError("Mix-and-matching single and large-scale gw and glitch injections unsupported")
+        raise AttributeError("Mix-and-matching individual and arbitrary gw and glitch injections unsupported")
 
     glitches = compute_glitches(
         glitches_params=glitches_params,

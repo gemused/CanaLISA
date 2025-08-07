@@ -183,7 +183,7 @@ def plot_anomaly_outlier_distributions(glitches, gws):
     figure, axis = plt.subplots(1, 1, figsize=(8, 4))
 
     max_bin = int(max(glitch_success_outliers + glitch_unsuccess_outliers)) + 1
-    step = 0.1
+    step = 0.2
     bins = [step * i for i in range(int(max_bin / step))]
     # bins = [step * i for i in range(int(8 / step))]
 
