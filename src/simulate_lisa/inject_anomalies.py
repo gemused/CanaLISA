@@ -27,7 +27,7 @@ PATH_pipe_data = os.path.join(PATH_bethLISA, "dist/pipe/pipe_data/")
 PATH_gw_data = os.path.join(PATH_bethLISA, "dist/gw/gw_data/")
 
 
-def init_pipe(pipe_input_path):
+def init_pipe(pipe_input_fn):
     """Retrieves pipeline information about simulation.
 
     Args:
@@ -36,17 +36,17 @@ def init_pipe(pipe_input_path):
     Returns:
         t0, dt, size of simulation (i.e. num data points in simulation)
     """
-    pipe_input = np.genfromtxt(pipe_input_path, dtype=float)
+    pipe_input = np.genfromtxt(PATH_pipe_data + pipe_input_fn + ".txt", dtype=float)
 
     return pipe_input[0], pipe_input[1], pipe_input[2]
 
 
 def simulate_lisa(
-    glitch_input_path, gw_input_path, orbits_input_path,
-    simulation_output_path, t0, dt, size, disable_noise
+    glitch_input_fn, gw_input_fn, orbits_input_fn,
+    simulation_output_fn, t0, dt, size, disable_noise
 ):
     """Simulates LISA instrument and writes simulation output data to simulation_output_path.
-    
+
     Also plots interferometer data and saves to dist/lisa_data/interferometer_plots.
 
     Args:
@@ -62,6 +62,11 @@ def simulate_lisa(
     Returns:
         None
     """
+    glitch_input_path = PATH_glitch_data + glitch_input_fn + ".h5"
+    gw_input_path = PATH_gw_data + gw_input_fn + ".h5"
+    orbits_input_path = PATH_orbits_data + orbits_input_fn + ".h5"
+    simulation_output_path = PATH_simulation_data + simulation_output_fn + ".h5"
+
     # CREATE LISA INSTRUMENT OBJECT
     lisa_instrument = Instrument(
         size=size,
@@ -90,7 +95,7 @@ def simulate_lisa(
 
 
 def compute_tdi(
-    simulation_input_path, tdi_output_path, t0, dt
+    simulation_input_fn, tdi_output_fn, t0, dt
 ):
     """Computes 2nd generation Michelson tdi channels and saves to file.
 
@@ -103,6 +108,9 @@ def compute_tdi(
     Returns:
         None
     """
+    simulation_input_path = PATH_simulation_data + simulation_input_fn + ".h5"
+    tdi_output_path = PATH_tdi_data + tdi_output_fn + ".h5"
+
     channels = [X2, Y2, Z2]
     tdi_names = ["X", "Y", "Z"]
     tdi_dict = TimeSeriesDict()
@@ -148,14 +156,14 @@ def inject_anomalies(
         None
     """
     t0, dt, size = init_pipe(
-        pipe_input_path=PATH_pipe_data + pipe_input_fn + ".txt",
+        pipe_input_fn=pipe_input_fn,
     )
 
     simulate_lisa(
-        glitch_input_path=PATH_glitch_data + glitch_input_fn + ".h5",
-        gw_input_path=PATH_gw_data + gw_input_fn + ".h5",
-        orbits_input_path=PATH_orbits_data + orbits_input_fn + ".h5",
-        simulation_output_path=PATH_simulation_data + simulation_output_fn + ".h5",
+        glitch_input_fn=glitch_input_fn,
+        gw_input_fn=gw_input_fn,
+        orbits_input_fn=orbits_input_fn,
+        simulation_output_fn=simulation_output_fn,
         t0=t0,
         dt=dt,
         size=size,
@@ -163,8 +171,8 @@ def inject_anomalies(
     )
 
     compute_tdi(
-        simulation_input_path=PATH_simulation_data + simulation_output_fn + ".h5",
-        tdi_output_path=PATH_tdi_data + tdi_output_fn + ".h5",
+        simulation_input_fn=simulation_output_fn,
+        tdi_output_fn=tdi_output_fn,
         t0=t0,
         dt=dt,
     )

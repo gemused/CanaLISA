@@ -1,0 +1,6 @@
+glitch_0:
+  shape: "ReducedOneSidedDoubleExpGlitch"
+  inj_point: "readout_tmi_carrier_12"
+  t_inj: 0
+  t_fall: 1
+  amp: 0

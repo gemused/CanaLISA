@@ -9,7 +9,7 @@ in config files.
 import os
 import numpy as np
 import ldc.io.yml as ymlio
-from glitch_shapes import ReducedOneSidedDoubleExpGlitch
+from glitch_shapes import ReducedOneSidedDoubleExpGlitch, RectangleGlitch
 from gw_shapes import ReducedOneSidedDoubleExpGW
 from scipy.optimize import fsolve
 
@@ -26,7 +26,7 @@ PATH_anomaly_data = os.path.join(PATH_bethLISA, "dist/tdi_backtracking/anomaly_d
 t0 = 10368000
 
 
-def make_t_injs(glitch_rate, gw_rate, duration, window):
+def make_t_injs(daily_rate, duration, window):
     """Makes a list of anomaly injection times.
 
     Args:
@@ -38,16 +38,25 @@ def make_t_injs(glitch_rate, gw_rate, duration, window):
     Returns:
         Anomaly injection times (list)
     """
-    t_injs = []
+    step = int(duration / (daily_rate * duration / 86400)) * 0.9
+    if step < window:
+        raise ValueError(f"Window ({window}) larger than max window ({step})")
 
-    for i in range(int((glitch_rate + gw_rate) * duration / 86400)):
-        t_injs.append(t0 + window * i)
+    t_injs = []
+    t_inj = 0
+
+    while True:
+        t_inj += step * (1 + 0.1 * np.random.normal())
+        if t_inj < duration - step:
+            t_injs.append(t0 + t_inj)
+        else:
+            break
 
     return t_injs
 
 
 def compute_anomalies_params(
-    glitch_cfg, gw_cfg, pipe_cfg, orbits_input_fn, t_injs
+    anomaly_cfg, pipe_cfg, orbits_input_fn, t_injs, daily_rate
 ):
     """Compute dictionaries of parameters for each glitch and gravitational wave
     signal to be injected.
@@ -68,40 +77,54 @@ def compute_anomalies_params(
     glitches_params = []
     gws_params = []
 
-    anomaly_rate = glitch_cfg["daily_rate"] + gw_cfg["daily_rate"]
+    relative_rates = {}
+    for key, value in anomaly_cfg.items():
+        relative_rates[key] = value["daily_rate"] / daily_rate
 
     for t_inj in t_injs:
-        if np.random.choice((True, False), p=(glitch_cfg["daily_rate"] / anomaly_rate, gw_cfg["daily_rate"] / anomaly_rate)):
-            if glitch_cfg["shape"] == "ReducedOneSidedDoubleExpGlitch":
-                t_fall_range = glitch_cfg["t_fall_range"]
-                amp_range = glitch_cfg["amp_range"]
+        shape = np.random.choice(list(relative_rates.keys()), p=list(relative_rates.values()))
+        anomaly = anomaly_cfg[shape]
 
-                glitches_params.append(
-                    {
-                        "shape": "ReducedOneSidedDoubleExpGlitch",
-                        "inj_point": np.random.choice(glitch_cfg["inj_points"]),
-                        "t_fall": np.random.randint(t_fall_range[0], t_fall_range[1]),
-                        "amp": np.random.uniform(float(amp_range[0]), float(amp_range[1])),
-                        "t_inj": t_inj,
-                    }
-                )
-            else:
-                raise AttributeError("Unsupported glitch shape")
+        if shape == "ReducedOneSidedDoubleExpGlitch":
+            t_fall_range = anomaly["t_fall_range"]
+            amp_range = anomaly["amp_range"]
+
+            glitches_params.append(
+                {
+                    "shape": "ReducedOneSidedDoubleExpGlitch",
+                    "inj_point": np.random.choice(anomaly["inj_points"]),
+                    "t_fall": np.random.randint(t_fall_range[0], t_fall_range[1]),
+                    "amp": np.random.uniform(float(amp_range[0]), float(amp_range[1])),
+                    "t_inj": t_inj,
+                }
+            )
+        elif shape == "RectangleGlitch":
+            width_range = anomaly["width_range"]
+            level_range = anomaly["level_range"]
+
+            glitches_params.append(
+                {
+                    "shape": "RectangleGlitch",
+                    "inj_point": np.random.choice(anomaly["inj_points"]),
+                    "width": np.random.randint(width_range[0], width_range[1]),
+                    "level": np.random.randint(level_range[0], level_range[1]),
+                    "t_inj": t_inj,
+                }
+            )
+        elif shape == "ReducedOneSidedDoubleExpGW":
+            t_fall_range = anomaly["t_fall_range"]
+            amp_range = anomaly["amp_range"]
+
+            gws_params.append(
+                {
+                    "shape": "ReducedOneSidedDoubleExpGW",
+                    "t_fall": np.random.randint(t_fall_range[0], t_fall_range[1]),
+                    "amp": np.random.uniform(float(amp_range[0]), float(amp_range[1])),
+                    "t_inj": t_inj,
+                }
+            )
         else:
-            if gw_cfg["shape"] == "ReducedOneSidedDoubleExpGW":
-                t_fall_range = gw_cfg["t_fall_range"]
-                amp_range = gw_cfg["amp_range"]
-
-                gws_params.append(
-                    {
-                        "shape": "ReducedOneSidedDoubleExpGW",
-                        "t_fall": np.random.randint(t_fall_range[0], t_fall_range[1]),
-                        "amp": np.random.uniform(float(amp_range[0]), float(amp_range[1])),
-                        "t_inj": t_inj,
-                    }
-                )
-            else:
-                raise AttributeError("Unsupported gravitational wave shape")
+            raise AttributeError("Unsupported anomaly shape")
 
     return glitches_params, gws_params
 
@@ -132,8 +155,20 @@ def compute_glitches(glitches_params, dt, size):
                     dt=dt,
                 )
             )
+        elif glitch_params["shape"] == "RectangleGlitch":
+            glitches.append(
+                RectangleGlitch(
+                    inj_point=glitch_params["inj_point"],
+                    t_inj=glitch_params["t_inj"],
+                    width=glitch_params["width"],
+                    level=glitch_params["level"],
+                    t0=t0,
+                    size=size,
+                    dt=dt,
+                )
+            )
         else:
-            raise AttributeError("Unsupported glitch shape")
+            raise AttributeError("Unsupported glitch shape: " + glitch_params["shape"])
 
     return glitches
 
@@ -220,6 +255,8 @@ def write(
         for glitch in glitches:
             if isinstance(glitch, ReducedOneSidedDoubleExpGlitch):
                 f.write(f"ReducedOneSidedDoubleExpGlitch {glitch.t_inj} {glitch.amp} {glitch.t_fall} {glitch.duration}\n")
+            elif isinstance(glitch, RectangleGlitch):
+                f.write(f"RectangleGlitch {glitch.t_inj} {glitch.level} {glitch.width} {glitch.duration}\n")
             else:
                 raise AttributeError("Unsupported glitch shape")
 
@@ -239,6 +276,8 @@ def write(
         for anomaly in anomalies:
             if isinstance(anomaly, ReducedOneSidedDoubleExpGlitch):
                 f.write(f"ReducedOneSidedDoubleExpGlitch {anomaly.inj_point} {anomaly.t_inj} {anomaly.amp} {anomaly.duration}\n")
+            elif isinstance(anomaly, RectangleGlitch):
+                f.write(f"RectangleGlitch {anomaly.inj_point} {anomaly.t_inj} {anomaly.level} {anomaly.duration}\n")
             elif isinstance(anomaly, ReducedOneSidedDoubleExpGW):
                 f.write(f"ReducedOneSidedDoubleExpGW gw {anomaly.t_inj} {anomaly.amp} {anomaly.duration}\n")
             else:
@@ -282,19 +321,24 @@ def make_anomalies(
         for gw_params in gws_params:
             gw_params["t_inj"] += t0
     elif "glitch_0" not in glitch_cfg and "gw_0" not in gw_cfg:
+        anomaly_cfg = glitch_cfg | gw_cfg
+
+        daily_rate = 0
+        for key, value in anomaly_cfg.items():
+            daily_rate += value["daily_rate"]
+
         t_injs = make_t_injs(
-            glitch_rate=glitch_cfg["daily_rate"],
-            gw_rate=gw_cfg["daily_rate"],
+            daily_rate=daily_rate,
             duration=pipe_cfg["duration"].to("s").value,
             window=800,
         )
 
         glitches_params, gws_params = compute_anomalies_params(
-            glitch_cfg=glitch_cfg,
-            gw_cfg=gw_cfg,
+            anomaly_cfg=anomaly_cfg,
             pipe_cfg=pipe_cfg,
             orbits_input_fn=orbits_input_fn,
             t_injs=t_injs,
+            daily_rate=daily_rate,
         )
     else:
         raise AttributeError("Mix-and-matching individual and arbitrary gw and glitch injections unsupported")

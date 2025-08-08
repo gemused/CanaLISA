@@ -127,31 +127,32 @@ gw_1:
 The second type of configuration files for anomaly parameter definitions are those where you don't specify each anomaly and its paramaters directly, but rather you specify a range of parameters and a daily rate. Furthermore for glitches you should also specify the injection point.
 
 Below is a template for an arbitrary glitch configuraiton file:
-~~~yml 
-shape: <str>
-inj_points:
+~~~yml
+<shape>:
+    inj_points:
+        ...
+        - <str>
+        ...
+    daily_rate: <int>
     ...
-    - <str>
+    <parameter_i>_range: [<float>, <float>]
     ...
-daily_rate: <int>
-...
-<parameter_i>_range: [<float>, <float>]
 ...
 ~~~
 Below is a template for an arbitrary gravitational wave configuration file:
 ~~~yml 
-shape: <str>
-daily_rate: <int>
-...
-<parameter_i>_range: [<float>, <float>]
+<shape>:
+    daily_rate: <int>
+    ...
+    <parameter_i>_range: [<float>, <float>]
+    ...
 ...
 ~~~
 
 Like the individually specified anomaly configuration files, glitch configs should go in `~/dist/glitch/glitch_config/` and gravitational wave configs in `~/dist/gw/gw_config/`.
 
 ### Troubleshooting
-- Currently mix-and-matching different anomaly shapes in arbitrarily specified configuration files is unsupported. So for instance, if you wanted an arbitrarily specified glitch config file with OneSidedDoubleExpGlitch glitches AND StepGlitch glitches, you would get an error or unexpected behaviour.
-- You must have both non-empty glitch and non-empty gravitational wave config files in order to simulate data.
+- You must have both non-empty glitch and non-empty gravitational wave config files in order to simulate data. To simulate noise realizations use the "empty.yml" configuration files.
 - Currently you are unable to mix-and-match configuration file types. For instance, if you wanted glitches to be individually specified and gravitational waves to be arbitrarily specified, you would get an error (likely).
 - Due to a unexpected behaviour with LISA orbit files, each simulation starts at a time `t0=10368000` (defined on line 29 in `make_anomalies.py`). Thus we define injection times (`t_inj`) in configuration files as the time in seconds *after* `t0`. So a `t_inj` of 1 would correspond to an actual injection time of `t0` + 1 = 10368001.
 

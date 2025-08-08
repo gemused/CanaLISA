@@ -1,3 +1,10 @@
+"""
+Filename: glitch_shapes.py
+Author: William Mostrenko
+Created: 2025-08-07
+Description: Classes for glitch shapes.
+"""
+
 import numpy as np
 from scipy.optimize import fsolve
 from lisaglitch import Glitch
@@ -9,7 +16,6 @@ class ReducedOneSidedDoubleExpGlitch(Glitch):
     """Represents a one-sided double exponential glitch in the case where t_rise=t_fall
 
     Args:
-        t_rise: Rising timescale
         t_fall: Falling timescale
         amp: relative amplitude scale
     """
@@ -48,3 +54,44 @@ class ReducedOneSidedDoubleExpGlitch(Glitch):
         signal = self.level * delta_t * np.exp(-delta_t / self.t_fall) / self.t_fall**2
 
         return np.where(delta_t >= 0, signal, 0)
+
+
+class RectangleGlitch(Glitch):
+    """Represents a rectangle glitch
+
+    Args:
+        width: width of rectangle (s)
+        level: amplitude
+    """
+
+    def __init__(
+        self,
+        width: float,
+        level: float,
+        **kwargs,
+    ) -> None:
+        super().__init__(**kwargs)
+
+        self.width = float(width)
+        self.level = float(level)
+        self.duration = self.compute_duration()
+
+    def compute_duration(self) -> float:
+        """compute an approximate duration for the glitch"""
+        return self.width
+
+    def compute_signal(self, t) -> np.ndarray:
+        """Computes the rectange model.
+
+        Args:
+            width: width of rectangle (s)
+            level: amplitude
+
+        Returns:
+            Computed model (array-like)
+        """
+        return np.where(
+            np.logical_and(t >= self.t_inj, t < self.t_inj + self.width),
+            self.level,
+            0
+        )

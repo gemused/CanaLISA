@@ -1,0 +1,13 @@
+glitch_0:
+  shape: "ReducedOneSidedDoubleExpGlitch"
+  inj_point: "readout_tmi_carrier_12"
+  t_inj: 10000
+  t_fall: 1
+  amp: 25000
+
+glitch_1:
+  shape: "RectangleGlitch"
+  inj_point: "readout_tmi_carrier_12"
+  t_inj: 5000
+  level: 200
+  width: 100

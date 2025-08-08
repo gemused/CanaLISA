@@ -1,0 +1,47 @@
+ReducedOneSidedDoubleExpGlitch:
+  inj_points:
+    - "readout_isi_carrier_12"
+    - "readout_isi_carrier_23"
+    - "readout_isi_carrier_31"
+    - "readout_isi_carrier_13"
+    - "readout_isi_carrier_32"
+    - "readout_isi_carrier_21"
+    - "readout_tmi_carrier_12"
+    - "readout_tmi_carrier_23"
+    - "readout_tmi_carrier_31"
+    - "readout_tmi_carrier_13"
+    - "readout_tmi_carrier_32"
+    - "readout_tmi_carrier_21"
+    - "readout_rfi_carrier_12"
+    - "readout_rfi_carrier_23"
+    - "readout_rfi_carrier_31"
+    - "readout_rfi_carrier_13"
+    - "readout_rfi_carrier_32"
+    - "readout_rfi_carrier_21"
+  daily_rate: 2
+  t_fall_range: [1, 100]
+  amp_range: [1.2e2, 5e3]
+
+RectangleGlitch:
+  inj_points:
+    - "readout_isi_carrier_12"
+    - "readout_isi_carrier_23"
+    - "readout_isi_carrier_31"
+    - "readout_isi_carrier_13"
+    - "readout_isi_carrier_32"
+    - "readout_isi_carrier_21"
+    - "readout_tmi_carrier_12"
+    - "readout_tmi_carrier_23"
+    - "readout_tmi_carrier_31"
+    - "readout_tmi_carrier_13"
+    - "readout_tmi_carrier_32"
+    - "readout_tmi_carrier_21"
+    - "readout_rfi_carrier_12"
+    - "readout_rfi_carrier_23"
+    - "readout_rfi_carrier_31"
+    - "readout_rfi_carrier_13"
+    - "readout_rfi_carrier_32"
+    - "readout_rfi_carrier_21"
+  daily_rate: 2
+  width_range: [10, 100]
+  level_range: [50, 500]

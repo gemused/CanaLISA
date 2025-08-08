@@ -1,3 +1,10 @@
+"""
+Filename: gw_shapes.py
+Author: William Mostrenko
+Created: 2025-08-07
+Description: Classes for gravitational wave shapes.
+"""
+
 import numpy as np
 from scipy.optimize import fsolve
 from lisagwresponse import ResponseFromStrain
@@ -7,7 +14,6 @@ class ReducedOneSidedDoubleExpGW(ResponseFromStrain):
     """Represents a one-sided double-exponential gw in the case where t_rise=t_fall
 
     Args:
-        t_rise: Rising timescale
         t_fall: Falling timescale
         amp: relative amplitude scale
     """

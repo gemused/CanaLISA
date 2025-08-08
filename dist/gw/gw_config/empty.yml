@@ -1,0 +1,6 @@
+gw_0:
+  shape: "ReducedOneSidedDoubleExpGW"
+  inj_point: "readout_tmi_carrier_12"
+  t_inj: 0
+  t_fall: 1
+  amp: 0

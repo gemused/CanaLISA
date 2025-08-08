@@ -1,0 +1,5 @@
+gw_0:
+  shape: "ReducedOneSidedDoubleExpGW"
+  t_inj: 20000
+  t_fall: 20
+  amp: 5e-12

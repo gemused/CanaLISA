@@ -1,0 +1,4 @@
+ReducedOneSidedDoubleExpGW:
+  daily_rate: 1
+  t_fall_range: [1, 100]
+  amp_range: [5e-12, 6e-12]
