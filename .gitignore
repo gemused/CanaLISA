@@ -3,5 +3,7 @@
 dist/glitch/glitch_data/*
 dist/gw/gw_data/*
 dist/lisa_data/tdi_data/*
-dist/canalysis/*
+dist/canalysis/gated_data/**/
+dist/canalysis/glitch_output/**/
+dist/canalysis/gw_output/**/
 
