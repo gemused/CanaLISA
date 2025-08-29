@@ -39,6 +39,13 @@ step_size = sampling_rate * step_seconds
 tdi_folder = "1d50apdLoud"  
 variables = "XYZ"
 
+"""
+Set tdi_folder above to the name of the data you want to analyze and gate. Set variables to the TDI channels you want to use. 
+"XYZ" or "AET" available. This doesn't really do anything except load the data differently, use a different model trained on those 
+channels, and return the gated data with these same channels.
+"""
+
+
 def load_time_series_data(folder, variables):
     """
     Loads TDI data, fetches glitch and gw injection times and loudness from h5 files.
@@ -49,10 +56,6 @@ def load_time_series_data(folder, variables):
 
     Returns:
         data: TDI data of shape (seconds, 3)
-        labels: binary feature labels of shape (seconds, 2): first array is 0 for every second with no glitch, 1 for every second with a glitch. 
-                second array is 0 for every second with no GW, 1 for every second with a GW.
-        glitch/gw_injection_times: start time of each glitch or gw in seconds, not ordered.
-        glitch/gw_volumes: array containing 'loud' or 'quiet' for each injection based on its level.
     """
 
     tdi1, tdi2, tdi3 = [], [], []
